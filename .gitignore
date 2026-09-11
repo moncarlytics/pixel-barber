@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Turborepo
+.turbo/
+
+# Environment variables (never commit real secrets)
+.env
+.env.local
+.env.*.local
+
+# Supabase local dev
+supabase/.temp/
+supabase/.branches/
+
+# Claude Code local-only settings (machine-specific, not shared)
+.claude/settings.local.json
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel
+.vercel/
+
+# Testing
+coverage/
+playwright-report/
+test-results/
