@@ -2,7 +2,7 @@
 
 **Document status:** Input document for Claude Code (or any engineer) to scaffold the project
 **Version:** 1.0
-**Versions verified:** 9 September 2026, against the npm registry directly
+**Versions verified:** 9 September 2026 originally; re-verified 11 September 2026 against the npm registry directly immediately before Phase 0 scaffolding, per this document's own section 19 policy — a handful of patch/minor releases had shipped in the two days between (see section 19's note for the one package that saw a major bump, deliberately not adopted here)
 **Companion to:** `pixel-barber-prd.md` (product/business rules) and `pixel-barber-app-flow.md` (screens/navigation) — this document does not repeat either; it only adds the technical layer needed to start writing code.
 
 ---
@@ -61,11 +61,11 @@ Root `package.json` declares npm workspaces (`"workspaces": ["apps/*", "packages
 
 | Dependency | Exact version | Notes |
 |---|---|---|
-| next | **16.3.4** | App Router only — no Pages Router |
-| react | **19.2.8** | |
-| react-dom | **19.2.8** | Must match the `react` version exactly |
-| typescript | **7.0.2** | This is the new Go-native compiler generation (a rewrite from the previous JavaScript-based `tsc`), significantly faster than prior majors. It is npm's current `latest` tag as of verification, but because it's an architectural rewrite rather than an incremental release, run the full lint/build pipeline early and watch for any editor plugin or typed-ESLint-rule incompatibility; if one surfaces, the fallback is pinning the last pre-rewrite release line instead. |
-| eslint-config-next | **16.3.4** | Kept in lockstep with the `next` version |
+| next | **16.3.5** | App Router only — no Pages Router |
+| react | **19.3.0** | |
+| react-dom | **19.3.0** | Must match the `react` version exactly |
+| typescript | **6.0.3** | Originally pinned to `7.0.2`, the new Go-native compiler generation — but Phase 0 scaffolding hit exactly the risk this row used to flag in advance: `typescript-eslint` (pulled in transitively by `eslint-config-next`) refuses to run at all against TypeScript 7.0 (`Error: typescript-eslint does not support TS 7.0`), which fails `npm run lint` outright, not just with warnings. Fell back to `6.0.3` — the latest stable pre-rewrite release — exactly as this row's own contingency plan said to. Confirmed compatible: the installed `typescript-eslint` (`8.70.0`, resolved via `eslint-config-next`'s `^8.46.0` range) declares `"typescript": ">=4.8.4 <6.1.0"` as its peer range, which `6.0.3` satisfies. Revisit the 7.x line once `typescript-eslint` ships TS 7 support (tracked at github.com/typescript-eslint/typescript-eslint#10940) — this is a tooling-compatibility fallback, not a permanent rejection of TypeScript 7. |
+| eslint-config-next | **16.3.5** | Kept in lockstep with the `next` version |
 
 ---
 
@@ -79,7 +79,7 @@ Root `package.json` declares npm workspaces (`"workspaces": ["apps/*", "packages
 | class-variance-authority | **0.7.1** | Variant styling for shadcn-generated components (exception — see section 21) |
 | clsx | **2.1.1** | Conditional className composition |
 | tailwind-merge | **3.6.0** | Resolves conflicting Tailwind classes when composing components (exception — see section 21) |
-| lucide-react | **1.42.0** | Icon set — the standard pairing with shadcn/ui |
+| lucide-react | **1.45.0** | Icon set — the standard pairing with shadcn/ui |
 | @radix-ui/react-\* | Pin each on addition, e.g. `@radix-ui/react-dialog` **1.1.23** | shadcn's CLI adds the specific Radix primitive package a given component needs (dialog, dropdown-menu, select, tabs, avatar, etc.) at generation time — pin whichever ones get added using this same exact-version policy rather than pre-installing ones that may go unused |
 
 ---
@@ -89,7 +89,7 @@ Root `package.json` declares npm workspaces (`"workspaces": ["apps/*", "packages
 | Dependency | Exact version | Notes |
 |---|---|---|
 | @supabase/supabase-js | **2.116.0** | Client for Postgres queries, Auth, Storage, and Realtime subscriptions — Realtime is what powers every live queue/dashboard update described in the App Flow document; no separate WebSocket library is needed |
-| @supabase/ssr | **0.12.6** | The current officially recommended package for server-side/App-Router Supabase auth — supersedes the deprecated `@supabase/auth-helpers-nextjs` (exception — see section 21) |
+| @supabase/ssr | **0.12.7** | The current officially recommended package for server-side/App-Router Supabase auth — supersedes the deprecated `@supabase/auth-helpers-nextjs` (exception — see section 21) |
 | supabase (CLI) | **2.117.0** | Dev-only: local development, migrations, generating TypeScript types into `packages/shared` from the live schema |
 
 ---
@@ -99,7 +99,7 @@ Root `package.json` declares npm workspaces (`"workspaces": ["apps/*", "packages
 | Dependency | Exact version | Notes |
 |---|---|---|
 | react-hook-form | **7.87.0** | Every form in the App Flow document — onboarding, walk-in registration, service/barber settings, feedback — uses this rather than mixing form approaches |
-| zod | **4.5.4** | Schema validation, shared between client-side form validation and server-side input validation in Next.js server actions |
+| zod | **4.6.2** | Schema validation, shared between client-side form validation and server-side input validation in Next.js server actions |
 | @hookform/resolvers | **5.9.1** | Bridges React Hook Form to Zod schemas (exception — see section 21) |
 
 ---
@@ -126,7 +126,7 @@ No separate global client-state library (Redux/Zustand/Jotai) is included — be
 
 | Dependency | Exact version | Notes |
 |---|---|---|
-| next-intl | **4.14.2** | Chosen over the higher-starred `react-i18next` specifically because it's built for the App Router and React Server Components, which the higher-star alternative isn't designed around (exception — see section 21). Covers all five launch languages from the App Flow document: English, French, Chinese, Spanish, German |
+| next-intl | **4.14.4** | Chosen over the higher-starred `react-i18next` specifically because it's built for the App Router and React Server Components, which the higher-star alternative isn't designed around (exception — see section 21). Covers all five launch languages from the App Flow document: English, French, Chinese, Spanish, German |
 
 ---
 
@@ -147,6 +147,8 @@ Per the decision to keep this build's AI use narrow, Gemini has exactly one job 
 | Dependency | Exact version | Notes |
 |---|---|---|
 | @google/genai | **1.15.0** | The current unified Google GenAI SDK — the previous `@google/generative-ai` package is officially deprecated in favor of this one. No alternative exists for calling Gemini specifically (exception — see section 21) |
+
+**Re-verification note (11 September 2026):** the live npm registry now shows `@google/genai` at **2.22.0** — a major version bump since this pin was set, unlike every other package's drift this same check caught (all patch/minor). This package isn't installed until Phase 7 (it's Edge-Function-only, per the architecture summary in section 2), so Phase 0 doesn't need a decision here — but re-check the 1.x→2.x changelog for breaking API changes before Phase 7 actually installs it, rather than assuming the exact-pin policy alone makes the jump safe.
 
 This runs as a Supabase Edge Function triggered by a database webhook on new `Feedback` rows with free-text content, writing the classified theme(s) back onto that row — never called directly from either Next.js app, so a feedback submission gets classified exactly once regardless of which surface it came through.
 
@@ -182,7 +184,7 @@ A ticket-lifecycle webhook (new ticket, called, no-show, cancelled) triggers the
 
 | Dependency | Exact version | Notes |
 |---|---|---|
-| eslint | **10.10.0** | Flat config (`eslint.config.js`) |
+| eslint | **9.39.5** | Flat config (`eslint.config.js`). Originally pinned to `10.10.0`, but downgraded during Phase 0 scaffolding: `eslint-plugin-react` — pulled in transitively by `eslint-config-next`, and still only at its latest published release, `7.37.5`, as of this check — declares a peer range of `eslint@^3 \|\| ^4 \|\| ^5 \|\| ^6 \|\| ^7 \|\| ^8 \|\| ^9.7` with no `^10` entry at all, and actually crashes at lint time under ESLint 10 (`TypeError: contextOrFilename.getFilename is not a function`, from a removed legacy Context API method its React-version auto-detection still calls) rather than just warning. `9.39.5` is the latest stable release in the `9.x` line `eslint-plugin-react` does support, and `eslint-config-next`'s own peer range (`eslint: >=9.0.0`, no upper bound) accepts it without issue. Revisit `10.x` once `eslint-plugin-react` ships ESLint 10 support — same kind of tooling-lag fallback as the `typescript` row above, not a rejection of ESLint 10 itself. |
 | prettier | **3.9.6** | Formatting, run via a pre-commit hook rather than left to individual editor settings |
 
 ---
@@ -206,28 +208,31 @@ Recommended environments: separate Supabase projects for staging and production 
 ```json
 {
   "dependencies": {
-    "next": "16.3.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "next": "16.3.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "@supabase/supabase-js": "2.116.0",
-    "@supabase/ssr": "0.12.6",
+    "@supabase/ssr": "0.12.7",
     "react-hook-form": "7.87.0",
-    "zod": "4.5.4",
+    "zod": "4.6.2",
     "@hookform/resolvers": "5.9.1",
     "@tanstack/react-query": "5.102.8",
     "date-fns": "4.4.0",
-    "next-intl": "4.14.2",
+    "next-intl": "4.14.4",
     "@googlemaps/js-api-loader": "2.1.1",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "tailwind-merge": "3.6.0",
-    "lucide-react": "1.42.0"
+    "lucide-react": "1.45.0"
   },
   "devDependencies": {
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
+    "@types/node": "24.13.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "tailwindcss": "4.3.3",
     "@tailwindcss/postcss": "4.3.3",
-    "eslint-config-next": "16.3.4"
+    "eslint-config-next": "16.3.5"
   }
 }
 ```
@@ -237,27 +242,30 @@ Recommended environments: separate Supabase projects for staging and production 
 ```json
 {
   "dependencies": {
-    "next": "16.3.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "next": "16.3.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "@supabase/supabase-js": "2.116.0",
-    "@supabase/ssr": "0.12.6",
+    "@supabase/ssr": "0.12.7",
     "react-hook-form": "7.87.0",
-    "zod": "4.5.4",
+    "zod": "4.6.2",
     "@hookform/resolvers": "5.9.1",
     "@tanstack/react-query": "5.102.8",
     "date-fns": "4.4.0",
-    "next-intl": "4.14.2",
+    "next-intl": "4.14.4",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "tailwind-merge": "3.6.0",
-    "lucide-react": "1.42.0"
+    "lucide-react": "1.45.0"
   },
   "devDependencies": {
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
+    "@types/node": "24.13.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "tailwindcss": "4.3.3",
     "@tailwindcss/postcss": "4.3.3",
-    "eslint-config-next": "16.3.4"
+    "eslint-config-next": "16.3.5"
   }
 }
 ```
@@ -275,8 +283,8 @@ Recommended environments: separate Supabase projects for staging and production 
   },
   "devDependencies": {
     "turbo": "2.10.12",
-    "typescript": "7.0.2",
-    "eslint": "10.10.0",
+    "typescript": "6.0.3",
+    "eslint": "9.39.5",
     "prettier": "3.9.6",
     "vitest": "5.0.0",
     "@testing-library/react": "16.3.3",
@@ -344,6 +352,13 @@ Re-verify every version in this document with `npm view <package> version` immed
 ## 21. What This Document Does Not Cover
 
 Payment processing has no entry here because the PRD keeps v1 pay-at-shop only (PRD section 5) — nothing to lock yet. A conversational AI assistant and any ML-driven recommendation engine are absent for the same reason: the PRD's section 27 keeps that as an unspec'd future direction, not a v1 feature, so there's no library to choose until that scope is actually opened up.
+
+**Four genuine gaps found and filled during Phase 0 scaffolding (11 September 2026), noted here rather than silently patched:**
+
+1. **TypeScript type declarations.** Neither app's dependency block above lists `@types/node`, `@types/react`, or `@types/react-dom` — necessary for `tsc --noEmit` to typecheck a React/Next.js codebase at all, and clearly an omission rather than a deliberate exclusion (nothing else in this document argues against them). Added to both apps' `devDependencies` at their own currently-verified versions, which do **not** track the underlying package's version number the way this document's other pins do: `@types/node` `24.13.4` (the latest release in DefinitelyTyped's `24.x` line matching our pinned Node major, not `24.20.0` — `@types/node`'s own patch cadence is independent of Node's), `@types/react` and `@types/react-dom` both `19.3.0` (these do happen to track React's `19.x` line here).
+2. **The root `packageManager` field.** Turborepo 2.x refuses to resolve the workspace without a `packageManager` field (or legacy `devEngines.packageManager`) in the root `package.json` — this document's own root `package.json` example (section 17) didn't include one. Added as `"packageManager": "npm@11.3.0"`, matching the npm version actually in use during scaffolding rather than section 3's Node-bundled npm guidance, since Turborepo needs one concrete, checkable string here regardless of which npm ships with Node 24.20.0 on a given machine.
+3. **`baseUrl` no longer works in TypeScript 7.** Confirmed exactly the risk section 4's `typescript` row flagged in advance: `tsc --noEmit` under `7.0.2` fails outright on `baseUrl` in either app's `tsconfig.json` (`error TS5102: Option 'baseUrl' has been removed`). Fixed by dropping `baseUrl` entirely and keeping `paths` as relative entries (`"./*"`, `"../../packages/shared/src"`) — TypeScript already resolves `paths` relative to the config file's own directory once `baseUrl` is absent, so nothing about the actual alias behavior changes, only the now-unsupported option is gone. No fallback to a pre-rewrite TypeScript release was needed for this one; flagged here in case a future `tsc --noEmit` failure elsewhere in the codebase turns out to be another `baseUrl`-shaped assumption from older tooling documentation or generated code.
+4. **The pre-commit Prettier hook.** Tech stack section 15 requires Prettier to "run via a pre-commit hook," but names no mechanism — the obvious real-world choice (husky + lint-staged) would mean adding two packages this document never pinned. Implemented instead with a dependency-free `.githooks/pre-commit` script (wired up via a root `prepare` script setting `core.hooksPath`) that shells out to the already-pinned `prettier` directly — satisfies the requirement without expanding the locked dependency manifest.
 
 ---
 

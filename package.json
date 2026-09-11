@@ -1,0 +1,34 @@
+{
+  "name": "pixel-barber",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": "24.20.0"
+  },
+  "packageManager": "npm@11.3.0",
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "turbo": "2.10.12",
+    "typescript": "6.0.3",
+    "eslint": "9.39.5",
+    "prettier": "3.9.6",
+    "vitest": "5.0.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "jsdom": "30.0.1",
+    "@playwright/test": "1.63.0"
+  }
+}

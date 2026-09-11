@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Formats staged files with Prettier before commit.
+# No extra dependency (husky/lint-staged) needed: prettier is already
+# a pinned devDependency, this just calls the locally installed one.
+staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.js' '*.jsx' '*.ts' '*.tsx' '*.json' '*.css' '*.md')
+
+if [ -n "$staged" ]; then
+  npx prettier --write $staged
+  echo "$staged" | xargs git add
+fi

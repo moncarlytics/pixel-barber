@@ -8,6 +8,9 @@ out/
 # Turborepo
 .turbo/
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Environment variables (never commit real secrets)
 .env
 .env.local
@@ -40,3 +43,7 @@ test-results/
 
 .vercel
 .env*
+!.env.example
+
+# Personal planning notes, not project source
+This is my idea and I want you to help me refine it and provide all kinds of different scenarios to make to reliable.docx

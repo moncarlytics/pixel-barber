@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens (colors, type scale, radius, motion) from
+ * Docs/pixel-barber-design-system.md land here as @theme values
+ * once real screens start being built — left minimal for Phase 0.
+ */
