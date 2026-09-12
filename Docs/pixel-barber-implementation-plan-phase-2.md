@@ -57,7 +57,7 @@ This phase is also where the PRD section 18 rule gets its first automated enforc
 
 ## 3. Phase 13 — In-App Customer–Barber Messaging
 
-**Builds on:** Phase 12's avatar system (a conversation's header shows the other participant's avatar), the first plan's Phase 5 (barber interface and ticket assignment, since a conversation opens only once a barber is assigned), and Phase 7 (the real MessageBird/Web Push notification pipeline, reused here rather than rebuilt for message alerts).
+**Builds on:** Phase 12's avatar system (a conversation's header shows the other participant's avatar), the first plan's Phase 5 (barber interface and ticket assignment, since a conversation opens only once a barber is assigned), and Phase 7 (the real Arkesel/Web Push notification pipeline, reused here rather than rebuilt for message alerts).
 
 **Scope.** Apply Backend Schema section 21.2–21.7 in full: the `conversations` and `messages` tables; the lifecycle triggers that close a conversation on ticket/appointment completion, cancellation, no-show, or barber reassignment; the `staff_view_conversation()` audited-access function and its backing `conversation_content_access_log` table; the RLS policies (participant-only direct access to `messages`, metadata-only staff visibility on `conversations`, no staff path to message content outside the audited function); the `view_message_content` capability, assigned only to Branch Manager and Owner; the Supabase Storage bucket for voice-note audio with its 30-day lifecycle rule; and the daily anonymization `pg_cron` job plus its paired Storage-deletion Edge Function.
 

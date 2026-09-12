@@ -19,7 +19,7 @@ Two filters were applied to every choice below: nothing newer than two years old
 
 **General-purpose libraries** (UI frameworks, form libraries, data-fetching, utilities) are judged by the star/age screen directly, because they compete for community adoption and a low star count on one of these is a real signal to look elsewhere.
 
-**Official vendor SDKs** (Supabase, Google, MessageBird, Vercel) are judged by the maturity and market position of the vendor and its documentation instead, not by GitHub stars — their usage is driven by who holds an API key to that specific service, not by community mindshare, so a modest star count on an official SDK repo says nothing about how established or safe it is. This is why `@google/genai` and `messagebird` appear below despite star counts well under 10,000.
+**Official vendor SDKs** (Supabase, Google, Vercel) are judged by the maturity and market position of the vendor and its documentation instead, not by GitHub stars — their usage is driven by who holds an API key to that specific service, not by community mindshare, so a modest star count on an official SDK repo says nothing about how established or safe it is. This is why `@google/genai` appears below despite a star count well under 10,000. Arkesel (section 13) has no official SDK at all — its Edge Function calls its REST API directly via `fetch()`, so this exception doesn't apply to it; there's no dependency to screen.
 
 **Ecosystem "connective tissue" packages** — the small utilities that are the de facto standard companion to a chosen framework (`tailwind-merge`, `class-variance-authority`, `clsx` alongside Tailwind/shadcn; `@hookform/resolvers` bridging React Hook Form and Zod) — are included under the "no well-established alternative" exception, because within their specific niche they are what nearly every production Next.js codebase already uses, which is exactly what maximizes Claude Code's familiarity with them. Section 21 lists every package that relied on this exception and why, so nothing is included without a stated reason.
 
@@ -160,11 +160,13 @@ These three packages are used from Supabase Edge Functions rather than from eith
 
 | Dependency | Exact version | Import as | Notes |
 |---|---|---|---|
-| messagebird | **4.0.1** | `npm:messagebird@4.0.1` | Official MessageBird Node SDK, chosen as the SMS provider for Ghana numbers. MessageBird is also one of Supabase Auth's natively-supported phone-OTP providers (alongside Twilio, Twilio Verify, TextLocal, and Vonage), so — unlike a provider outside that list — it needs no custom Auth Hook: OTP delivery is a dashboard setting in the Supabase project's Auth configuration, and this package is only for the ticket-lifecycle/appointment SMS function below. Confirm MessageBird's supported sending routes/pricing for Ghana numbers before launch |
+| standardwebhooks | **1.1.1** | `npm:standardwebhooks@1.1.1` | Official Standard Webhooks reference library, used to verify the `svix-id`/`svix-timestamp`/`svix-signature` headers Supabase Auth's Send SMS Hook signs every payload with (`SEND_SMS_HOOK_SECRET`) — this is Supabase's own documented mechanism for authenticating that a hook request genuinely came from Supabase Auth, not a third party hitting the function's public URL |
 | web-push | **3.6.7** | `npm:web-push@3.6.7` | Reference implementation of the Web Push protocol for sending to a browser's push subscription — the server-side half of the native Web Push approach chosen for this build (exception — see section 21) |
 | @google/genai | **1.15.0** | `npm:@google/genai@1.15.0` | Same package as section 12, invoked from the feedback-classification function specifically |
 
-A ticket-lifecycle webhook (new ticket, called, no-show, cancelled) triggers the SMS/push function; a new-feedback webhook triggers the Gemini classification function. Both are ordinary Postgres triggers calling Supabase's built-in webhook mechanism — no message queue is needed at this scale.
+SMS delivery (both the phone-OTP path and the ticket-lifecycle/appointment path) goes through **Arkesel**, Ghana's SMS gateway, called directly via `fetch()` against its REST API (`POST https://sms.arkesel.com/api/v2/sms/send`, `api-key` header, JSON body `{ sender, message, recipients }`) — Arkesel publishes no official SDK (cURL/Python/Node/PHP code samples only), so there is no package to list here or screen against section 1's star/age rule. Because Arkesel is not one of Supabase Auth's natively-supported phone providers (unlike Twilio/Twilio Verify/TextLocal/Vonage/MessageBird), OTP delivery requires a custom **Send SMS Hook** — a `send-sms` Edge Function registered in the Supabase dashboard's Auth Hooks settings, invoked by Supabase Auth itself (not a Postgres webhook) every time it needs to send an OTP. The same `send-sms` function is reused by the ticket-lifecycle/appointment SMS function below rather than duplicating the Arkesel call in two places. Confirm Arkesel's Ghana sender-ID registration requirement (alphanumeric sender IDs need network-level registration, max 11 characters) before launch — this blocks real SMS delivery exactly the way it would for any provider, not an Arkesel-specific gap.
+
+A ticket-lifecycle webhook (new ticket, called, no-show, cancelled) triggers the SMS/push function; a new-feedback webhook triggers the Gemini classification function. Both are ordinary Postgres triggers calling Supabase's built-in webhook mechanism — no message queue is needed at this scale. The Send SMS Hook above is separate from this webhook mechanism: it's an Auth Hook Supabase's GoTrue service calls directly, not a database trigger.
 
 ---
 
@@ -300,7 +302,7 @@ Recommended environments: separate Supabase projects for staging and production 
 ```json
 {
   "imports": {
-    "messagebird": "npm:messagebird@4.0.1",
+    "standardwebhooks": "npm:standardwebhooks@1.1.1",
     "web-push": "npm:web-push@3.6.7",
     "@google/genai": "npm:@google/genai@1.15.0"
   }
@@ -319,7 +321,8 @@ Recommended environments: separate Supabase projects for staging and production 
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Customer app, client | Restrict by HTTP referrer in Google Cloud Console |
 | `GOOGLE_MAPS_SERVER_API_KEY` | Server-side Distance Matrix calls | Separate, IP-restricted key rather than reusing the public one |
 | `GEMINI_API_KEY` | Feedback-classification Edge Function only | Never exposed client-side |
-| `MESSAGEBIRD_API_KEY` / `MESSAGEBIRD_ORIGINATOR` | Ticket-lifecycle/appointment SMS Edge Function only | Never exposed client-side; the same MessageBird account is configured separately, natively, in the Supabase project's Auth settings for OTP delivery (no app-level env var needed for that path) |
+| `ARKESEL_API_KEY` / `ARKESEL_SENDER_ID` | `send-sms` Edge Function only (Supabase Edge Function secrets, not a Next.js app env var) | Never exposed client-side; used for both the OTP path (Send SMS Hook) and the ticket-lifecycle/appointment SMS path, since both go through the same function |
+| `SEND_SMS_HOOK_SECRET` | `send-sms` Edge Function only (Supabase Edge Function secret) | The Standard Webhooks signing secret Supabase generates when the Send SMS Hook is enabled in the dashboard (format `v1,whsec_<base64>`) — verifies a request genuinely came from Supabase Auth before the function ever calls Arkesel |
 | `VAPID_PUBLIC_KEY` | Client (subscription) + server (sending) | Web Push key pair |
 | `VAPID_PRIVATE_KEY` | Server-only | |
 | `VAPID_SUBJECT` | Server-only | A `mailto:` contact address, required by the Web Push protocol |
@@ -342,7 +345,7 @@ Re-verify every version in this document with `npm view <package> version` immed
 | @hookform/resolvers | Official bridge between React Hook Form and Zod — no alternative better integrated with either |
 | next-intl | Purpose-built for the App Router/React Server Components, unlike the higher-starred `react-i18next` — chosen for framework fit over raw star count, per explicit direction |
 | @googlemaps/js-api-loader | Official Google Maps loader — chosen to avoid adding a third-party wrapper on top of an already-Google-dependent stack (Gemini) |
-| messagebird | Star count on the SDK repository sits under the threshold, but it's the official vendor SDK and MessageBird is one of Supabase Auth's own natively-supported OTP providers, which is what makes the OTP-delivery path (backend schema section 17) a dashboard setting rather than custom code |
+| standardwebhooks | Official Standard Webhooks reference library — no alternative for verifying Supabase Auth's Send SMS Hook signature, and reimplementing HMAC signature verification by hand is exactly the kind of security-sensitive code a maintained library exists to avoid |
 | web-push | Reference implementation of the Web Push protocol — no better-established alternative for the native Web Push approach chosen over Firebase Cloud Messaging |
 | class-variance-authority, tailwind-merge, clsx | De facto standard companions to Tailwind CSS and shadcn/ui — below the star threshold individually, but what nearly every production Tailwind/shadcn codebase already uses |
 | shadcn (CLI) | A code-generation tool, not a runtime dependency — the underlying Radix Primitives project it scaffolds against is well past the threshold on its own |
