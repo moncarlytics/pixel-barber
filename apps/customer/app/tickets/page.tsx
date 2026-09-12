@@ -11,26 +11,23 @@ export default function TicketsPage() {
   const supabase = createBrowserSupabaseClient();
 
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    const channel = supabase
+      .channel('my-tickets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_tickets' }, () => {
+        supabase
+          .from('queue_tickets')
+          .select('*')
+          .then(({ data: refreshed }) => setTickets(refreshed ?? []));
+      })
+      .subscribe();
 
-    async function load() {
-      const { data } = await supabase.from('queue_tickets').select('*');
-      setTickets(data ?? []);
-
-      channel = supabase
-        .channel('my-tickets')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_tickets' }, () => {
-          supabase
-            .from('queue_tickets')
-            .select('*')
-            .then(({ data: refreshed }) => setTickets(refreshed ?? []));
-        })
-        .subscribe();
-    }
-    load();
+    supabase
+      .from('queue_tickets')
+      .select('*')
+      .then(({ data }) => setTickets(data ?? []));
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
   }, []);
 
