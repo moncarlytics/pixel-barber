@@ -18,17 +18,19 @@
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "bootstrap:owner": "node scripts/bootstrap-owner.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "dotenv": "^17.4.2",
+    "eslint": "9.39.5",
+    "jsdom": "30.0.1",
+    "prettier": "3.9.6",
     "turbo": "2.10.12",
     "typescript": "6.0.3",
-    "eslint": "9.39.5",
-    "prettier": "3.9.6",
-    "vitest": "5.0.0",
-    "@testing-library/react": "16.3.3",
-    "@testing-library/jest-dom": "7.0.1",
-    "jsdom": "30.0.1",
-    "@playwright/test": "1.63.0"
+    "vitest": "5.0.0"
   }
 }
