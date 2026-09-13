@@ -33,7 +33,7 @@ export default function BranchListPage() {
     setError(null);
     const { data: business } = await supabase.from('businesses').select('id').single();
     if (!business) {
-      setError('No business row found.');
+      setError(t('noBusinessFound'));
       return;
     }
     const { error: insertError } = await supabase.from('branches').insert({

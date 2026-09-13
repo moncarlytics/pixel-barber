@@ -42,7 +42,8 @@
       "4": "Thursday",
       "5": "Friday",
       "6": "Saturday"
-    }
+    },
+    "noBusinessFound": "No business row found."
   },
   "ServicesPricing": {
     "title": "Services & Pricing",

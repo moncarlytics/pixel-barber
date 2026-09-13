@@ -30,21 +30,32 @@ export default function ServicesPricingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     supabase
       .from('branches')
       .select('*')
-      .then(({ data }) => {
+      .order('name')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setError(error.message);
+          return;
+        }
         setBranches(data ?? []);
-        const first = data?.[0];
-        if (first) setSelectedBranchId(first.id);
+        setSelectedBranchId((current) => current || data?.[0]?.id || '');
       });
     supabase
       .from('services')
       .select('*')
-      .then(({ data }) => setAllServices(data ?? []));
+      .then(({ data }) => {
+        if (!cancelled) setAllServices(data ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function loadBranchServices(branchId: string) {
+  async function loadBranchServices(branchId: string, isCancelled?: () => boolean) {
     const { data: bsRows } = await supabase
       .from('branch_services')
       .select('id, service_id, services(name)')
@@ -55,6 +66,7 @@ export default function ServicesPricingPage() {
       .select('branch_service_id, price_ghs')
       .in('branch_service_id', branchServiceIds.length > 0 ? branchServiceIds : ['']);
     const priceByBs = new Map((priceRows ?? []).map((p) => [p.branch_service_id, p.price_ghs]));
+    if (isCancelled?.()) return;
     setBranchServices(
       (bsRows ?? []).map((bs) => ({
         branchServiceId: bs.id,
@@ -66,9 +78,14 @@ export default function ServicesPricingPage() {
   }
 
   useEffect(() => {
-    if (selectedBranchId) loadBranchServices(selectedBranchId);
+    if (!selectedBranchId) return;
+    let cancelled = false;
+    loadBranchServices(selectedBranchId, () => cancelled);
     setLinkServiceId('');
     setLinkPrice('');
+    return () => {
+      cancelled = true;
+    };
   }, [selectedBranchId]);
 
   async function handleAddService(e: React.FormEvent) {
