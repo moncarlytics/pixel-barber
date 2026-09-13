@@ -289,6 +289,21 @@ max_frequency = "5s"
 enabled = true
 uri = "pg-functions://postgres/public/custom_access_token_hook"
 
+# This hook fires whenever Supabase Auth needs to send a phone-OTP SMS. Unlike a natively-supported
+# provider (Twilio, MessageBird, etc.), Arkesel needs a custom HTTP endpoint -- Supabase signs every
+# call with the Standard Webhooks scheme (svix-id/svix-timestamp/svix-signature headers) using this
+# same secret, which the send-sms Edge Function verifies before trusting the payload.
+[auth.hook.send_sms]
+enabled = true
+uri = "https://bfkokxcdgvrnevtpeycw.supabase.co/functions/v1/send-sms"
+secrets = "env(SEND_SMS_HOOK_SECRET)"
+
+# Auth Hooks are called by GoTrue directly, not by an end-user client -- they never carry a normal
+# Supabase JWT, so the platform's default JWT gate must be disabled for this one function. The
+# Standard Webhooks signature verification inside the function itself is the real authentication.
+[functions.send-sms]
+verify_jwt = false
+
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
 enabled = false
@@ -296,14 +311,6 @@ account_sid = ""
 message_service_sid = ""
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
 auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
-
-[auth.sms.messagebird]
-enabled = false
-# Placeholder until a real MessageBird originator (virtual number or alphanumeric sender ID) is
-# set up for Ghana SMS delivery -- real OTP delivery will not work until this is replaced.
-originator = "TBD"
-# DO NOT commit your MessageBird access key to git. Use environment variable substitution instead:
-access_key = "env(SUPABASE_AUTH_SMS_MESSAGEBIRD_ACCESS_KEY)"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
