@@ -3,9 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { createBrowserSupabaseClient, normalizeGhanaPhone } from '@pixel-barber/shared';
+import {
+  AVATAR_LIBRARY,
+  createBrowserSupabaseClient,
+  normalizeGhanaPhone,
+} from '@pixel-barber/shared';
 
-type Step = 'phone' | 'otp' | 'password';
+type Step = 'phone' | 'otp' | 'password' | 'avatar' | 'notifications' | 'welcome';
 
 export default function OnboardPage() {
   const router = useRouter();
@@ -17,6 +21,7 @@ export default function OnboardPage() {
   const [normalizedPhone, setNormalizedPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
+  const [avatarKey, setAvatarKey] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   async function handlePhoneSubmit(e: React.FormEvent) {
@@ -66,7 +71,7 @@ export default function OnboardPage() {
       setError(linkError.message);
       return;
     }
-    router.push('/tickets');
+    setStep('avatar');
   }
 
   return (
@@ -113,6 +118,41 @@ export default function OnboardPage() {
           />
           <button type="submit">{t('finish')}</button>
         </form>
+      )}
+      {step === 'avatar' && (
+        <div>
+          <h2>{t('chooseAvatarTitle')}</h2>
+          <div role="radiogroup">
+            {AVATAR_LIBRARY.map((avatar) => (
+              <button
+                key={avatar.key}
+                type="button"
+                aria-pressed={avatarKey === avatar.key}
+                onClick={() => setAvatarKey(avatar.key)}
+              >
+                {avatar.emoji} {avatar.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={!avatarKey}
+            onClick={async () => {
+              setError(null);
+              const { error: avatarError } = await supabase
+                .from('customers')
+                .update({ avatar_key: avatarKey })
+                .eq('auth_user_id', (await supabase.auth.getUser()).data.user?.id ?? '');
+              if (avatarError) {
+                setError(avatarError.message);
+                return;
+              }
+              setStep('notifications');
+            }}
+          >
+            {t('continueButton')}
+          </button>
+        </div>
       )}
     </main>
   );

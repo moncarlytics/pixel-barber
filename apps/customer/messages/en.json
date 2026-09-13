@@ -12,7 +12,9 @@
     "verify": "Verify",
     "passwordPlaceholder": "Set a password",
     "finish": "Finish",
-    "invalidPhone": "Enter a valid 10-digit Ghana phone number."
+    "invalidPhone": "Enter a valid 10-digit Ghana phone number.",
+    "chooseAvatarTitle": "Choose Your Avatar",
+    "continueButton": "Continue"
   },
   "Tickets": {
     "title": "My Tickets"
