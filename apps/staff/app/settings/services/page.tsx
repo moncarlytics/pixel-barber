@@ -67,6 +67,8 @@ export default function ServicesPricingPage() {
 
   useEffect(() => {
     if (selectedBranchId) loadBranchServices(selectedBranchId);
+    setLinkServiceId('');
+    setLinkPrice('');
   }, [selectedBranchId]);
 
   async function handleAddService(e: React.FormEvent) {
@@ -107,6 +109,7 @@ export default function ServicesPricingPage() {
     });
     if (priceError) {
       setError(priceError.message);
+      loadBranchServices(selectedBranchId);
       return;
     }
     setLinkServiceId('');
