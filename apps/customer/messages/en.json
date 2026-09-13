@@ -28,6 +28,33 @@
   "Tickets": {
     "title": "My Tickets"
   },
+  "Profile": {
+    "title": "Profile",
+    "accountInfoTitle": "Account",
+    "name": "Name",
+    "phone": "Phone",
+    "email": "Email",
+    "save": "Save",
+    "saved": "Saved",
+    "avatarTitle": "Avatar",
+    "changeAvatar": "Change",
+    "notificationsTitle": "Notifications",
+    "enablePush": "Push notifications",
+    "smsBackup": "SMS backup",
+    "leadTimePrimary": "Primary lead time (minutes)",
+    "leadTimeSecondary": "Secondary lead time (minutes)",
+    "languageTitle": "Language",
+    "languageValue": "English",
+    "defaultBranchTitle": "Default Branch",
+    "noBranchSelected": "No default branch selected",
+    "marketingConsentTitle": "Marketing Messages",
+    "marketingConsentLabel": "Send me promotions and offers",
+    "visitHistoryTitle": "Visit History",
+    "noVisits": "No visits yet.",
+    "feedbackHistoryTitle": "Feedback History",
+    "noFeedback": "No feedback submitted yet.",
+    "logOut": "Log Out"
+  },
   "BranchDiscovery": {
     "title": "Find a Branch",
     "searchPlaceholder": "Search branches",
