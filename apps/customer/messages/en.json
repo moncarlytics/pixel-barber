@@ -1,0 +1,51 @@
+{
+  "Home": {
+    "title": "Pixel Barber",
+    "loading": "Loading branches…"
+  },
+  "Onboard": {
+    "title": "Sign Up",
+    "namePlaceholder": "Full name",
+    "phonePlaceholder": "0244123456",
+    "sendCode": "Send Code",
+    "otpPlaceholder": "6-digit code",
+    "verify": "Verify",
+    "passwordPlaceholder": "Set a password",
+    "finish": "Finish",
+    "invalidPhone": "Enter a valid 10-digit Ghana phone number."
+  },
+  "Tickets": {
+    "title": "My Tickets"
+  },
+  "BranchDiscovery": {
+    "title": "Find a Branch",
+    "searchPlaceholder": "Search branches",
+    "noResults": "No branches match your search.",
+    "clearFilters": "Clear filters",
+    "startingFrom": "From GHS {price}",
+    "view": "View",
+    "statusOpen": "Open",
+    "statusClosed": "Closed",
+    "statusClosingSoon": "Closing soon",
+    "statusTemporarilyClosed": "Temporarily closed"
+  },
+  "BranchDetail": {
+    "back": "Back to branches",
+    "hoursTitle": "Hours",
+    "servicesTitle": "Services",
+    "barbersTitle": "Barbers",
+    "noBarbers": "No barbers listed yet.",
+    "joinQueue": "Join Queue",
+    "bookAppointment": "Book Appointment",
+    "closedOnDay": "Closed",
+    "days": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    }
+  }
+}

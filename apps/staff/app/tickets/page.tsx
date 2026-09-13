@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
 
 type Ticket = Database['public']['Tables']['queue_tickets']['Row'];
 
 export default function StaffTicketsPage() {
+  const t = useTranslations('Tickets');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const supabase = createBrowserSupabaseClient();
 
@@ -36,7 +38,7 @@ export default function StaffTicketsPage() {
 
   return (
     <main>
-      <h1>Branch Tickets</h1>
+      <h1>{t('title')}</h1>
       <ul>
         {tickets.map((t) => (
           <li key={t.id}>

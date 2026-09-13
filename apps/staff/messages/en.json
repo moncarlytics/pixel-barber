@@ -1,0 +1,62 @@
+{
+  "Home": {
+    "title": "Pixel Barber — Staff Portal",
+    "logIn": "Log in"
+  },
+  "Login": {
+    "title": "Staff Login",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Password",
+    "logIn": "Log In"
+  },
+  "Tickets": {
+    "title": "Branch Tickets"
+  },
+  "BranchSettings": {
+    "listTitle": "Branches",
+    "newBranch": "+ New Branch",
+    "name": "Name",
+    "branchCode": "Branch code",
+    "address": "Address",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "phone": "Phone",
+    "geofenceRadius": "Geofence radius (meters)",
+    "save": "Save",
+    "saved": "Saved",
+    "create": "Create Branch",
+    "hoursTitle": "Hours",
+    "closedCheckbox": "Closed",
+    "opensAt": "Opens",
+    "closesAt": "Closes",
+    "closuresTitle": "Special Closures",
+    "closureDate": "Date",
+    "closureReason": "Reason (optional)",
+    "addClosure": "Add Closure",
+    "remove": "Remove",
+    "days": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    }
+  },
+  "ServicesPricing": {
+    "title": "Services & Pricing",
+    "selectBranch": "Branch",
+    "newServiceName": "New service name",
+    "newServiceDuration": "Duration (minutes)",
+    "addService": "+ Add Service (business-wide)",
+    "linkService": "Link an existing service to this branch",
+    "linkPrice": "Starting price (GHS)",
+    "linkButton": "Link to Branch",
+    "currentPrice": "Current price",
+    "newPrice": "New price (GHS)",
+    "effectiveFrom": "Effective from",
+    "updatePrice": "Update Price",
+    "noBranchServices": "No services linked to this branch yet."
+  }
+}

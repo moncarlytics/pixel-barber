@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, normalizeGhanaPhone } from '@pixel-barber/shared';
 
 type Step = 'phone' | 'otp' | 'password';
 
 export default function OnboardPage() {
   const router = useRouter();
+  const t = useTranslations('Onboard');
   const supabase = createBrowserSupabaseClient();
   const [step, setStep] = useState<Step>('phone');
   const [name, setName] = useState('');
@@ -22,7 +24,7 @@ export default function OnboardPage() {
     setError(null);
     const normalized = normalizeGhanaPhone(phoneInput);
     if (!normalized) {
-      setError('Enter a valid 10-digit Ghana phone number.');
+      setError(t('invalidPhone'));
       return;
     }
     const { error: otpError } = await supabase.auth.signInWithOtp({ phone: normalized });
@@ -69,47 +71,47 @@ export default function OnboardPage() {
 
   return (
     <main>
-      <h1>Sign Up</h1>
+      <h1>{t('title')}</h1>
       {error && <p role="alert">{error}</p>}
       {step === 'phone' && (
         <form onSubmit={handlePhoneSubmit}>
           <input
-            placeholder="Full name"
+            placeholder={t('namePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
           />
           <input
-            placeholder="0244123456"
+            placeholder={t('phonePlaceholder')}
             value={phoneInput}
             onChange={(e) => setPhoneInput(e.target.value)}
             required
           />
-          <button type="submit">Send Code</button>
+          <button type="submit">{t('sendCode')}</button>
         </form>
       )}
       {step === 'otp' && (
         <form onSubmit={handleOtpSubmit}>
           <input
-            placeholder="6-digit code"
+            placeholder={t('otpPlaceholder')}
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
             required
           />
-          <button type="submit">Verify</button>
+          <button type="submit">{t('verify')}</button>
         </form>
       )}
       {step === 'password' && (
         <form onSubmit={handlePasswordSubmit}>
           <input
             type="password"
-            placeholder="Set a password"
+            placeholder={t('passwordPlaceholder')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
           />
-          <button type="submit">Finish</button>
+          <button type="submit">{t('finish')}</button>
         </form>
       )}
     </main>

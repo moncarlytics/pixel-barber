@@ -1,10 +1,13 @@
+'use client';
+
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 
 export default function Home() {
+  const t = useTranslations('Home');
   return (
     <main>
-      <h1>Pixel Barber</h1>
-      <p>Customer app — under construction.</p>
+      <h1>{t('title')}</h1>
       <Link href="/onboard">Sign Up</Link>
     </main>
   );
