@@ -14,7 +14,16 @@
     "finish": "Finish",
     "invalidPhone": "Enter a valid 10-digit Ghana phone number.",
     "chooseAvatarTitle": "Choose Your Avatar",
-    "continueButton": "Continue"
+    "continueButton": "Continue",
+    "notificationsTitle": "Notification Preferences",
+    "enablePush": "Enable push notifications",
+    "pushPermissionDenied": "Push notifications are off — you'll still get SMS updates.",
+    "smsBackupLabel": "SMS as backup",
+    "leadTimePrimaryLabel": "Notify me this many minutes before my turn",
+    "leadTimeSecondaryLabel": "And again this many minutes before",
+    "finishSetup": "Finish Setup",
+    "welcomeTitle": "You're All Set!",
+    "welcomeMessage": "Welcome to Pixel Barber."
   },
   "Tickets": {
     "title": "My Tickets"

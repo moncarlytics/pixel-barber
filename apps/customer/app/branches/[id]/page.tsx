@@ -105,8 +105,8 @@ export default function BranchDetailPage() {
         </ul>
       )}
 
-      <Link href="/onboard">{t('joinQueue')}</Link>
-      <Link href="/onboard">{t('bookAppointment')}</Link>
+      <Link href={`/onboard?fromBranch=${params.id}`}>{t('joinQueue')}</Link>
+      <Link href={`/onboard?fromBranch=${params.id}`}>{t('bookAppointment')}</Link>
     </main>
   );
 }

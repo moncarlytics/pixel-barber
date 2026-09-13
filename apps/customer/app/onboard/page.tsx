@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   AVATAR_LIBRARY,
@@ -13,6 +13,8 @@ type Step = 'phone' | 'otp' | 'password' | 'avatar' | 'notifications' | 'welcome
 
 export default function OnboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromBranch = searchParams.get('fromBranch');
   const t = useTranslations('Onboard');
   const supabase = createBrowserSupabaseClient();
   const [step, setStep] = useState<Step>('phone');
@@ -22,6 +24,10 @@ export default function OnboardPage() {
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [avatarKey, setAvatarKey] = useState('');
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [smsBackupEnabled, setSmsBackupEnabled] = useState(true);
+  const [leadPrimary, setLeadPrimary] = useState(10);
+  const [leadSecondary, setLeadSecondary] = useState(5);
   const [error, setError] = useState<string | null>(null);
 
   async function handlePhoneSubmit(e: React.FormEvent) {
@@ -153,6 +159,108 @@ export default function OnboardPage() {
           >
             {t('continueButton')}
           </button>
+        </div>
+      )}
+      {step === 'notifications' && (
+        <div>
+          <h2>{t('notificationsTitle')}</h2>
+          <label>
+            <input
+              type="checkbox"
+              checked={pushEnabled}
+              onChange={async (e) => {
+                const checked = e.target.checked;
+                if (checked && typeof window !== 'undefined' && 'Notification' in window) {
+                  const permission = await Notification.requestPermission();
+                  setPushEnabled(permission === 'granted');
+                } else {
+                  setPushEnabled(false);
+                }
+              }}
+            />
+            {t('enablePush')}
+          </label>
+          {!pushEnabled && <p>{t('pushPermissionDenied')}</p>}
+          <label>
+            <input
+              type="checkbox"
+              checked={smsBackupEnabled}
+              onChange={(e) => setSmsBackupEnabled(e.target.checked)}
+            />
+            {t('smsBackupLabel')}
+          </label>
+          <label>
+            {t('leadTimePrimaryLabel')}
+            <input
+              type="number"
+              value={leadPrimary}
+              onChange={(e) => setLeadPrimary(Number(e.target.value))}
+              min={1}
+              max={60}
+            />
+          </label>
+          <label>
+            {t('leadTimeSecondaryLabel')}
+            <input
+              type="number"
+              value={leadSecondary}
+              onChange={(e) => setLeadSecondary(Number(e.target.value))}
+              min={1}
+              max={60}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={async () => {
+              setError(null);
+              const { data: userData } = await supabase.auth.getUser();
+              const userId = userData.user?.id;
+              const { error: prefsError } = await supabase
+                .from('customers')
+                .update({
+                  push_enabled: pushEnabled,
+                  sms_backup_enabled: smsBackupEnabled,
+                  push_lead_minutes_primary: leadPrimary,
+                  push_lead_minutes_secondary: leadSecondary,
+                })
+                .eq('auth_user_id', userId ?? '');
+              if (prefsError) {
+                setError(prefsError.message);
+                return;
+              }
+              const { data: customerRow } = await supabase
+                .from('customers')
+                .select('id')
+                .eq('auth_user_id', userId ?? '')
+                .single();
+              if (customerRow) {
+                await supabase.from('consents').insert({
+                  customer_id: customerRow.id,
+                  consent_type: 'transactional',
+                  granted: true,
+                  source: 'onboarding_step_5',
+                });
+              }
+              setStep('welcome');
+            }}
+          >
+            {t('finishSetup')}
+          </button>
+        </div>
+      )}
+      {step === 'welcome' && (
+        <div>
+          <h2>{t('welcomeTitle')}</h2>
+          <p>{t('welcomeMessage')}</p>
+          {(() => {
+            // Auto-redirect after a brief pause rather than requiring another click -- App Flow
+            // section 5 step 6 describes this as "returns the customer directly," not as a screen
+            // that waits for input.
+            setTimeout(() => {
+              router.push(fromBranch ? `/branches/${fromBranch}` : '/');
+            }, 1500);
+            return null;
+          })()}
         </div>
       )}
     </main>
