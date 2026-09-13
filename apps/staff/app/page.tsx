@@ -10,6 +10,7 @@ export default function Home() {
       <h1>{t('title')}</h1>
       <Link href="/login">{t('logIn')}</Link>
       <Link href="/settings/branch">Branch Settings</Link>
+      <Link href="/settings/services">Services & Pricing</Link>
     </main>
   );
 }
