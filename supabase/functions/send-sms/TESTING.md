@@ -61,3 +61,8 @@ Once `ARKESEL_SENDER_ID` is a real registered sender ID:
 Repeat the `curl` command from step 1 but with `SIG` changed to any other string (e.g. append an
 extra character). Expected: `HTTP 401` with an error body — confirms the function actually rejects
 unsigned/mis-signed requests rather than trusting any caller who knows its URL.
+
+Note: if more than ~5 minutes have passed since generating `/tmp/send-sms-test-payload.json` in
+step 1, regenerate it first — Standard Webhooks rejects stale timestamps, so a re-run against an
+old payload would get a `401` for the wrong reason (staleness, not the intended tampered-signature
+rejection), silently making this security test meaningless.

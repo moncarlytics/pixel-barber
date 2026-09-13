@@ -264,6 +264,9 @@ enable_signup = true
 # auto-approved.
 enable_confirmations = true
 # Template for sending OTP to users
+# NOTE: dead config -- the Send SMS Hook (auth.hook.send_sms below) receives only {user, sms: {otp}}
+# and the send-sms Edge Function composes its own message text in buildOtpMessage(), so this
+# template is never actually used.
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
 max_frequency = "5s"
@@ -291,7 +294,7 @@ uri = "pg-functions://postgres/public/custom_access_token_hook"
 
 # This hook fires whenever Supabase Auth needs to send a phone-OTP SMS. Unlike a natively-supported
 # provider (Twilio, MessageBird, etc.), Arkesel needs a custom HTTP endpoint -- Supabase signs every
-# call with the Standard Webhooks scheme (svix-id/svix-timestamp/svix-signature headers) using this
+# call with the Standard Webhooks scheme (webhook-id/webhook-timestamp/webhook-signature headers) using this
 # same secret, which the send-sms Edge Function verifies before trusting the payload.
 [auth.hook.send_sms]
 enabled = true

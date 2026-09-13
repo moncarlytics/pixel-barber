@@ -39,8 +39,13 @@ export function isArkeselSuccess(httpOk: boolean, rawBody: string): boolean {
   if (!httpOk) return false;
   try {
     const parsed = JSON.parse(rawBody) as { status?: string };
-    return parsed.status === undefined || parsed.status === 'success';
+    if (parsed.status === undefined) {
+      console.warn('Arkesel returned a 2xx response with no status field', rawBody);
+      return true;
+    }
+    return parsed.status === 'success';
   } catch {
+    console.warn('Arkesel returned a non-JSON 2xx response body', rawBody);
     return true;
   }
 }
@@ -87,6 +92,7 @@ Deno.serve(async (req) => {
         message: buildOtpMessage(otp),
         recipients: [recipient],
       }),
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
     console.error('Failed to reach Arkesel', err);

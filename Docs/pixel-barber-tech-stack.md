@@ -160,7 +160,7 @@ These three packages are used from Supabase Edge Functions rather than from eith
 
 | Dependency | Exact version | Import as | Notes |
 |---|---|---|---|
-| standardwebhooks | **1.1.1** | `npm:standardwebhooks@1.1.1` | Official Standard Webhooks reference library, used to verify the `svix-id`/`svix-timestamp`/`svix-signature` headers Supabase Auth's Send SMS Hook signs every payload with (`SEND_SMS_HOOK_SECRET`) — this is Supabase's own documented mechanism for authenticating that a hook request genuinely came from Supabase Auth, not a third party hitting the function's public URL |
+| standardwebhooks | **1.1.1** | `npm:standardwebhooks@1.1.1` | Official Standard Webhooks reference library, used to verify the `webhook-id`/`webhook-timestamp`/`webhook-signature` headers Supabase Auth's Send SMS Hook signs every payload with (`SEND_SMS_HOOK_SECRET`) — this is Supabase's own documented mechanism for authenticating that a hook request genuinely came from Supabase Auth, not a third party hitting the function's public URL |
 | web-push | **3.6.7** | `npm:web-push@3.6.7` | Reference implementation of the Web Push protocol for sending to a browser's push subscription — the server-side half of the native Web Push approach chosen for this build (exception — see section 21) |
 | @google/genai | **1.15.0** | `npm:@google/genai@1.15.0` | Same package as section 12, invoked from the feedback-classification function specifically |
 
