@@ -69,20 +69,18 @@ describe('branch_status_view', () => {
   it("reports open when now falls inside today's hours", async () => {
     const now = new Date();
     const dayOfWeek = now.getDay();
-    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toTimeString().slice(0, 8);
-    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toTimeString().slice(0, 8);
-    await admin
-      .from('branch_hours')
-      .upsert(
-        {
-          branch_id: branchId,
-          day_of_week: dayOfWeek,
-          opens_at: opensAt,
-          closes_at: closesAt,
-          is_closed: false,
-        },
-        { onConflict: 'branch_id,day_of_week' },
-      );
+    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString().slice(11, 19);
+    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
+    await admin.from('branch_hours').upsert(
+      {
+        branch_id: branchId,
+        day_of_week: dayOfWeek,
+        opens_at: opensAt,
+        closes_at: closesAt,
+        is_closed: false,
+      },
+      { onConflict: 'branch_id,day_of_week' },
+    );
 
     const { data } = await admin
       .from('branch_status_view')
@@ -95,20 +93,18 @@ describe('branch_status_view', () => {
   it('reports closing_soon within 30 minutes of close', async () => {
     const now = new Date();
     const dayOfWeek = now.getDay();
-    const opensAt = new Date(now.getTime() - 2 * 60 * 60 * 1000).toTimeString().slice(0, 8);
-    const closesAt = new Date(now.getTime() + 10 * 60 * 1000).toTimeString().slice(0, 8);
-    await admin
-      .from('branch_hours')
-      .upsert(
-        {
-          branch_id: branchId,
-          day_of_week: dayOfWeek,
-          opens_at: opensAt,
-          closes_at: closesAt,
-          is_closed: false,
-        },
-        { onConflict: 'branch_id,day_of_week' },
-      );
+    const opensAt = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
+    const closesAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString().slice(11, 19);
+    await admin.from('branch_hours').upsert(
+      {
+        branch_id: branchId,
+        day_of_week: dayOfWeek,
+        opens_at: opensAt,
+        closes_at: closesAt,
+        is_closed: false,
+      },
+      { onConflict: 'branch_id,day_of_week' },
+    );
 
     const { data } = await admin
       .from('branch_status_view')
@@ -118,21 +114,21 @@ describe('branch_status_view', () => {
     expect(data?.status).toBe('closing_soon');
   });
 
-  it('reports closed on a day marked is_closed', async () => {
+  it('reports closed on a day marked is_closed, even during what would otherwise be open hours', async () => {
     const now = new Date();
     const dayOfWeek = now.getDay();
-    await admin
-      .from('branch_hours')
-      .upsert(
-        {
-          branch_id: branchId,
-          day_of_week: dayOfWeek,
-          opens_at: null,
-          closes_at: null,
-          is_closed: true,
-        },
-        { onConflict: 'branch_id,day_of_week' },
-      );
+    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString().slice(11, 19);
+    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
+    await admin.from('branch_hours').upsert(
+      {
+        branch_id: branchId,
+        day_of_week: dayOfWeek,
+        opens_at: opensAt,
+        closes_at: closesAt,
+        is_closed: true,
+      },
+      { onConflict: 'branch_id,day_of_week' },
+    );
 
     const { data } = await admin
       .from('branch_status_view')
@@ -145,20 +141,18 @@ describe('branch_status_view', () => {
   it('reports temporarily_closed when the branch flag is set, overriding hours', async () => {
     const now = new Date();
     const dayOfWeek = now.getDay();
-    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toTimeString().slice(0, 8);
-    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toTimeString().slice(0, 8);
-    await admin
-      .from('branch_hours')
-      .upsert(
-        {
-          branch_id: branchId,
-          day_of_week: dayOfWeek,
-          opens_at: opensAt,
-          closes_at: closesAt,
-          is_closed: false,
-        },
-        { onConflict: 'branch_id,day_of_week' },
-      );
+    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString().slice(11, 19);
+    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
+    await admin.from('branch_hours').upsert(
+      {
+        branch_id: branchId,
+        day_of_week: dayOfWeek,
+        opens_at: opensAt,
+        closes_at: closesAt,
+        is_closed: false,
+      },
+      { onConflict: 'branch_id,day_of_week' },
+    );
     await admin.from('branches').update({ is_temporarily_closed: true }).eq('id', branchId);
 
     const { data } = await admin
@@ -188,14 +182,12 @@ describe('current_branch_service_price', () => {
   });
 
   it('prefers an active promo row over a non-promo row', async () => {
-    await admin
-      .from('branch_service_prices')
-      .insert({
-        branch_service_id: branchServiceId,
-        price_ghs: 35,
-        is_promo: true,
-        effective_from: '2020-01-01',
-      });
+    await admin.from('branch_service_prices').insert({
+      branch_service_id: branchServiceId,
+      price_ghs: 35,
+      is_promo: true,
+      effective_from: '2020-01-01',
+    });
 
     const { data } = await admin
       .from('current_branch_service_price')
