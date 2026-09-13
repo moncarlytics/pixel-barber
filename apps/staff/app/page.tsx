@@ -9,6 +9,7 @@ export default function Home() {
     <main>
       <h1>{t('title')}</h1>
       <Link href="/login">{t('logIn')}</Link>
+      <Link href="/settings/branch">Branch Settings</Link>
     </main>
   );
 }
