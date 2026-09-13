@@ -18,9 +18,9 @@ const payload = JSON.stringify({
 });
 const id = 'msg_test';
 const timestamp = Math.floor(Date.now() / 1000).toString();
-const toSign = `${id}.${timestamp}.${payload}`;
+const toSign = \`\${id}.\${timestamp}.\${payload}\`;
 const signature = crypto.createHmac('sha256', Buffer.from(secret, 'base64')).update(toSign).digest('base64');
-console.log(JSON.stringify({ id, timestamp, signature: `v1,${signature}`, payload }));
+console.log(JSON.stringify({ id, timestamp, signature: \`v1,\${signature}\`, payload }));
 " > /tmp/send-sms-test-payload.json
 ```
 
@@ -34,9 +34,9 @@ SIG=$(node -e "console.log(JSON.parse(require('fs').readFileSync('/tmp/send-sms-
 
 curl -i -X POST https://bfkokxcdgvrnevtpeycw.supabase.co/functions/v1/send-sms \
   -H "Content-Type: application/json" \
-  -H "svix-id: $ID" \
-  -H "svix-timestamp: $TS" \
-  -H "svix-signature: $SIG" \
+  -H "webhook-id: $ID" \
+  -H "webhook-timestamp: $TS" \
+  -H "webhook-signature: $SIG" \
   -d "$PAYLOAD"
 ```
 
