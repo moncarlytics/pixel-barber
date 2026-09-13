@@ -122,12 +122,13 @@ export default function OnboardPage() {
       {step === 'avatar' && (
         <div>
           <h2>{t('chooseAvatarTitle')}</h2>
-          <div role="radiogroup">
+          <div role="radiogroup" aria-label={t('chooseAvatarTitle')}>
             {AVATAR_LIBRARY.map((avatar) => (
               <button
                 key={avatar.key}
                 type="button"
-                aria-pressed={avatarKey === avatar.key}
+                role="radio"
+                aria-checked={avatarKey === avatar.key}
                 onClick={() => setAvatarKey(avatar.key)}
               >
                 {avatar.emoji} {avatar.label}
