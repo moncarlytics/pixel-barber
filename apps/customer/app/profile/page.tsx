@@ -135,9 +135,10 @@ export default function ProfilePage() {
               type="button"
               role="radio"
               aria-checked={customer.avatar_key === avatar.key}
+              title={avatar.label}
               onClick={() => setCustomer({ ...customer, avatar_key: avatar.key })}
             >
-              {avatar.emoji}
+              {avatar.emoji} {avatar.label}
             </button>
           ))}
         </div>
@@ -147,7 +148,15 @@ export default function ProfilePage() {
           <input
             type="checkbox"
             checked={customer.push_enabled}
-            onChange={(e) => setCustomer({ ...customer, push_enabled: e.target.checked })}
+            onChange={async (e) => {
+              const checked = e.target.checked;
+              if (checked && typeof window !== 'undefined' && 'Notification' in window) {
+                const permission = await Notification.requestPermission();
+                setCustomer({ ...customer, push_enabled: permission === 'granted' });
+              } else {
+                setCustomer({ ...customer, push_enabled: false });
+              }
+            }}
           />
           {t('enablePush')}
         </label>

@@ -24,7 +24,7 @@ export default function OnboardWizard() {
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [avatarKey, setAvatarKey] = useState('');
-  const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false);
   const [smsBackupEnabled, setSmsBackupEnabled] = useState(true);
   const [leadPrimary, setLeadPrimary] = useState(10);
   const [leadSecondary, setLeadSecondary] = useState(5);
@@ -278,18 +278,26 @@ export default function OnboardWizard() {
                 setError(prefsError.message);
                 return;
               }
-              const { data: customerRow } = await supabase
+              const { data: customerRow, error: customerFetchError } = await supabase
                 .from('customers')
                 .select('id')
                 .eq('auth_user_id', userId ?? '')
                 .single();
+              if (customerFetchError) {
+                setError(customerFetchError.message);
+                return;
+              }
               if (customerRow) {
-                await supabase.from('consents').insert({
+                const { error: consentError } = await supabase.from('consents').insert({
                   customer_id: customerRow.id,
                   consent_type: 'transactional',
                   granted: true,
                   source: 'onboarding_step_5',
                 });
+                if (consentError) {
+                  setError(consentError.message);
+                  return;
+                }
               }
               setStep('welcome');
             }}
