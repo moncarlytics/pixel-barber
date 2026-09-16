@@ -102,3 +102,19 @@ test('completing the avatar/notifications/welcome steps records a transactional 
     await admin.auth.admin.deleteUser(authUserId);
   }
 });
+
+test('a session-less visitor lands on the phone-entry step promptly', async ({ page }) => {
+  // Every visitor to /onboard now renders null until Step 0's on-mount session-resumption
+  // check (in OnboardWizard.tsx) resolves -- including normal first-time visitors who have no
+  // session at all. This test doesn't seed any cookies/session (Playwright gives each test a
+  // fresh, isolated browser context by default), so `supabase.auth.getUser()` should
+  // short-circuit quickly for a session-less client and resumeCheckComplete should flip to
+  // true fast, landing on the default 'phone' step. A tight timeout is intentional here: this
+  // test's job is to catch a regression (an accidental delay or stuck-loading state), not to
+  // tolerate slowness the way the resuming-user test above does.
+  await page.goto('/onboard');
+
+  await expect(page.getByRole('heading', { name: 'Sign Up' })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole('button', { name: 'Send Code' })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByPlaceholder('0244123456')).toBeVisible();
+});
