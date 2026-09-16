@@ -80,6 +80,10 @@ export default function ServicesPricingPage() {
   useEffect(() => {
     if (!selectedBranchId) return;
     let cancelled = false;
+    // loadBranchServices()'s setState calls all happen after an await, not synchronously within
+    // this effect's execution -- the standard mount-time data-fetch pattern this rule can't
+    // distinguish from a genuine synchronous setState-in-effect misuse.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadBranchServices(selectedBranchId, () => cancelled);
     setLinkServiceId('');
     setLinkPrice('');
