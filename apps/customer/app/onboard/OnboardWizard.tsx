@@ -29,6 +29,38 @@ export default function OnboardWizard() {
   const [leadPrimary, setLeadPrimary] = useState(10);
   const [leadSecondary, setLeadSecondary] = useState(5);
   const [error, setError] = useState<string | null>(null);
+  const [resumeCheckComplete, setResumeCheckComplete] = useState(false);
+
+  useEffect(() => {
+    // Resume an in-progress onboarding: a customer who verified phone/OTP/password in a
+    // previous session but closed the browser before finishing avatar/notifications/welcome
+    // should not be forced back through phone entry (which would uselessly re-send an SMS).
+    // `avatar_key IS NULL` is the one reliable signal that the avatar step hasn't been
+    // completed yet -- there's no equivalent single signal for "notifications step done", so
+    // we only ever resume as far as the avatar step. Guarded by the empty dependency array
+    // below so this runs once on mount, not on every render.
+    let cancelled = false;
+    async function checkForResumableSession() {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (userId) {
+        const { data: customerRow } = await supabase
+          .from('customers')
+          .select('avatar_key')
+          .eq('auth_user_id', userId)
+          .maybeSingle();
+        if (!cancelled && customerRow && customerRow.avatar_key === null) {
+          setStep('avatar');
+        }
+      }
+      if (!cancelled) setResumeCheckComplete(true);
+    }
+    checkForResumableSession();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (step !== 'welcome') return;
@@ -89,6 +121,13 @@ export default function OnboardWizard() {
       return;
     }
     setStep('avatar');
+  }
+
+  if (!resumeCheckComplete) {
+    // Avoid a flash of the phone-entry form while the on-mount session-resumption check
+    // (above) is still resolving -- rendering it synchronously first would let a resumed
+    // customer briefly see (and interact with) step 1 before being redirected to 'avatar'.
+    return null;
   }
 
   return (
