@@ -11,3 +11,5 @@ export type {
   CurrentlyServing,
   WaitConfidence,
 } from './wait-time';
+export { updateTicketWithVersion } from './ticket-updates';
+export type { TicketUpdateResult } from './ticket-updates';
