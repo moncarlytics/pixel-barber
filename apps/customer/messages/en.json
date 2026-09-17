@@ -100,5 +100,31 @@
     "notSignedIn": "Not signed in.",
     "joinFailed": "Failed to join queue.",
     "priceLabel": "— GHS {price}"
+  },
+  "TicketTracking": {
+    "positionLabel": "Position in queue",
+    "aheadLabel": "Customers ahead of you",
+    "waitEstimateLabel": "Estimated wait",
+    "confidenceHigh": "High confidence",
+    "confidenceModerate": "Moderate confidence",
+    "confidenceVariable": "Variable conditions",
+    "stateWaiting": "Waiting",
+    "stateAlmostTurn": "Almost your turn",
+    "stateCalled": "You're being served",
+    "stateReleased": "Your ticket was released",
+    "releasedReason": "because you weren't available in time",
+    "rejoin": "Rejoin Queue",
+    "cancelButton": "Cancel",
+    "stepOutButton": "Step Out",
+    "cancelSheetTitle": "Why are you cancelling?",
+    "reasonWaitTooLong": "Wait too long",
+    "reasonCantMakeIt": "Can't make it",
+    "reasonChangedPlans": "Changed plans",
+    "reasonFoundAnotherBarber": "Found another barber",
+    "reasonEmergency": "Emergency",
+    "reasonOther": "Other",
+    "confirmCancel": "Confirm Cancellation",
+    "backButton": "Back",
+    "conflictMessage": "This ticket was just updated — showing the latest state."
   }
 }

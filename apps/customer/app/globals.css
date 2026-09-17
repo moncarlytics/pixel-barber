@@ -5,3 +5,14 @@
  * Docs/pixel-barber-design-system.md land here as @theme values
  * once real screens start being built — left minimal for Phase 0.
  */
+
+/* PRD 18: the queue-position avatar animation must have a reduced-motion fallback wherever it
+   appears -- disable the transition without hiding the text it's layered over. */
+.queue-avatar-track span {
+  transition: margin-left 0.6s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .queue-avatar-track span {
+    transition: none;
+  }
+}

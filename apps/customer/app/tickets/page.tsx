@@ -39,9 +39,11 @@ export default function TicketsPage() {
       <h1>{t('title')}</h1>
       <Link href="/profile">Profile</Link>
       <ul>
-        {tickets.map((t) => (
-          <li key={t.id}>
-            {t.ticket_number} — {t.state}
+        {tickets.map((ticket) => (
+          <li key={ticket.id}>
+            <Link href={`/tickets/${ticket.id}`}>
+              {ticket.ticket_number} — {ticket.state}
+            </Link>
           </li>
         ))}
       </ul>
