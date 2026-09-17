@@ -9,6 +9,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, updateTicketWithVersion } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
@@ -23,6 +24,7 @@ const NEXT_CUSTOMER_STATES = ['waiting', 'almost_turn'] as const;
 
 export default function TodaysQueuePage() {
   const t = useTranslations('TodaysQueue');
+  const router = useRouter();
   const supabase = createBrowserSupabaseClient();
 
   const [myBarber, setMyBarber] = useState<Barber | null>(null);
@@ -251,7 +253,6 @@ export default function TodaysQueuePage() {
     if (!myBarber) return;
     setError(null);
     // barbers_self_update (Phase 1) already covers any status value on the barber's own row.
-    // 'end_of_shift' is Task 7's job to wire meaningfully -- this just writes the value.
     const { data, error: statusError } = await supabase
       .from('barbers')
       .update({ status })
@@ -263,6 +264,18 @@ export default function TodaysQueuePage() {
       return;
     }
     if (data) setMyBarber(data);
+
+    // Per backend-schema 3.3's own conclusion, End Shift on a shared station is deliberately just
+    // an ordinary Supabase sign-out -- there is no separate "shared station session" mechanism.
+    // signOut() clears the current session entirely, and Today's Queue's own data-fetching is
+    // keyed off the *current* session's resolved barber id (see resolveIdentity/refetchQueue
+    // above), so the next barber to log in on this station gets a fully fresh identity chain with
+    // no leftover queue view from this barber -- the same handler regardless of whether this
+    // barber originally logged in via password or PIN.
+    if (status === 'end_of_shift') {
+      await supabase.auth.signOut();
+      router.push('/login');
+    }
   }
 
   return (
