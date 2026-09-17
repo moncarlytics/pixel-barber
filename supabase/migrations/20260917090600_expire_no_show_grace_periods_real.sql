@@ -1,0 +1,32 @@
+-- backend-schema 15.3's own note: "An actual production version of the first job also needs to
+-- write the resulting queue_events row and enqueue the 'your ticket was released' notification for
+-- each affected ticket... wrap both jobs' bodies in a single plpgsql function per job... once that
+-- additional work is added." This is that real version, for the no-show job specifically (the
+-- appointment-activation job is Phase 6's concern, untouched here).
+create or replace function expire_no_show_grace_periods() returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_ticket record;
+begin
+  for v_ticket in
+    select id, customer_id from queue_tickets
+    where state in ('called','grace_period') and grace_period_expires_at < now()
+  loop
+    update queue_tickets set state = 'no_show', no_show_at = now() where id = v_ticket.id;
+
+    insert into queue_events (ticket_id, event_type, actor_type, after_state)
+      values (v_ticket.id, 'no_show', 'system', jsonb_build_object('state', 'no_show'));
+
+    insert into notifications (recipient_type, recipient_id, channel, notification_type, related_ticket_id, payload)
+      values ('customer', v_ticket.customer_id, 'sms', 'ticket_released', v_ticket.id, '{}'::jsonb);
+  end loop;
+end;
+$$;
+
+revoke execute on function expire_no_show_grace_periods() from public, anon, authenticated;
+
+select cron.unschedule('expire-no-show-grace-periods');
+select cron.schedule('expire-no-show-grace-periods', 'every 30 seconds', 'select expire_no_show_grace_periods();');
