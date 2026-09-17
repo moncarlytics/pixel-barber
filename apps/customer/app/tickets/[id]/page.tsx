@@ -103,7 +103,8 @@ export default function TicketTrackingPage() {
 
   const avatar = customer ? AVATAR_LIBRARY.find((a) => a.key === customer.avatar_key) : null;
   const isReleased = ticket.state === 'no_show' || ticket.state === 'cancelled';
-  const isActive = !isReleased && ticket.state !== 'completed';
+  const isCompleted = ticket.state === 'completed';
+  const isActive = !isReleased && !isCompleted;
 
   return (
     <main>
@@ -123,16 +124,18 @@ export default function TicketTrackingPage() {
 
       {isActive && (
         <>
+          <p>{t('positionLabel', { position: ticket.position ?? '—' })}</p>
           <p>
-            {t('positionLabel')}: {ticket.position ?? '—'}
-          </p>
-          <p>
-            {t('aheadLabel')}: {ticket.position !== null ? Math.max(0, ticket.position - 1) : '—'}
+            {t('aheadLabel', {
+              count: ticket.position !== null ? Math.max(0, ticket.position - 1) : '—',
+            })}
           </p>
           {ticket.estimated_wait_low_min !== null && ticket.estimated_wait_high_min !== null && (
             <p>
-              {t('waitEstimateLabel')}: {ticket.estimated_wait_low_min}–
-              {ticket.estimated_wait_high_min} min
+              {t('waitEstimateLabel', {
+                low: ticket.estimated_wait_low_min,
+                high: ticket.estimated_wait_high_min,
+              })}
             </p>
           )}
           <p>
@@ -171,6 +174,8 @@ export default function TicketTrackingPage() {
           </button>
         </>
       )}
+
+      {isCompleted && <p>{t('stateCompleted')}</p>}
 
       {showCancelSheet && (
         <div role="dialog" aria-label={t('cancelSheetTitle')}>
