@@ -85,5 +85,17 @@
       "5": "Friday",
       "6": "Saturday"
     }
+  },
+  "Book": {
+    "title": "Join the Queue",
+    "branchStepTitle": "Branch",
+    "serviceStepTitle": "Service",
+    "barberStepTitle": "Barber",
+    "anyAvailable": "Any available",
+    "waitEstimateLabel": "Estimated wait",
+    "reviewTitle": "Review & Confirm",
+    "confirmJoin": "Join Now",
+    "alreadyInQueue": "You're already in the queue for this branch.",
+    "viewTicket": "View My Ticket"
   }
 }

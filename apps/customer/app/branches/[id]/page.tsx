@@ -25,6 +25,17 @@ export default function BranchDetailPage() {
   const [hours, setHours] = useState<BranchHour[]>([]);
   const [services, setServices] = useState<ServiceRow[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setHasSession(!!data.user);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -66,6 +77,7 @@ export default function BranchDetailPage() {
   if (!branch) return null;
 
   const dayLabels = t.raw('days') as Record<string, string>;
+  const joinHref = hasSession ? `/book?branch=${params.id}` : `/onboard?fromBranch=${params.id}`;
 
   return (
     <main>
@@ -105,8 +117,8 @@ export default function BranchDetailPage() {
         </ul>
       )}
 
-      <Link href={`/onboard?fromBranch=${params.id}`}>{t('joinQueue')}</Link>
-      <Link href={`/onboard?fromBranch=${params.id}`}>{t('bookAppointment')}</Link>
+      <Link href={joinHref}>{t('joinQueue')}</Link>
+      <Link href={joinHref}>{t('bookAppointment')}</Link>
     </main>
   );
 }
