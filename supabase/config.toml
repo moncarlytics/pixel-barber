@@ -307,6 +307,14 @@ secrets = "env(SEND_SMS_HOOK_SECRET)"
 [functions.send-sms]
 verify_jwt = false
 
+# Phase 5 finding: pin-login is a barber's FIRST authentication step (backend-schema 3.3) -- by
+# definition there is no prior Supabase session/JWT yet, so the platform's default JWT gate (which
+# every other Edge Function in this project correctly relies on, since tickets-join/tickets-walk-in
+# genuinely require an authenticated caller) must be disabled here too, for the same underlying
+# reason as send-sms above. The function's own PIN/bcrypt check is the real authentication.
+[functions.pin-login]
+verify_jwt = false
+
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
 enabled = false
