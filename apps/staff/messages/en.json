@@ -104,5 +104,31 @@
     "setPinButton": "Set/Rotate PIN",
     "pinSetSuccess": "PIN updated",
     "pinSetFailed": "Failed to update PIN"
+  },
+  "TodaysQueue": {
+    "title": "Today's Queue",
+    "noBarberProfile": "No barber profile found for this account.",
+    "statusTitle": "My Status",
+    "currentStatusLabel": "Current status: {status}",
+    "statusAvailable": "Available",
+    "statusBreak": "Break",
+    "statusEndShift": "End Shift",
+    "currentCustomerTitle": "Current Customer",
+    "noCurrentCustomer": "No customer currently in service.",
+    "nextCustomerTitle": "Next Customer",
+    "noNextCustomer": "No customer waiting.",
+    "ticketNumberLabel": "Ticket {number}",
+    "customerLabel": "Customer: {id}",
+    "serviceLabel": "Service: {id}",
+    "acknowledgeAction": "Acknowledge",
+    "notPresentAction": "Not Present",
+    "skipAction": "Skip",
+    "markCompleteAction": "Mark Complete",
+    "notPresentConfirmTitle": "Confirm Not Present",
+    "notPresentConfirmPrompt": "Mark this customer as not present? They will enter a grace period before being released.",
+    "confirmButton": "Confirm",
+    "cancelButton": "Cancel",
+    "conflictMessage": "This ticket was just updated by someone else — showing the latest state.",
+    "actionFailed": "Something went wrong. Please try again."
   }
 }
