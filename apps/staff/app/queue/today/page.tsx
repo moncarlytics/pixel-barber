@@ -77,22 +77,31 @@ export default function TodaysQueuePage() {
   }, []);
 
   async function refetchQueue(barberId: string) {
-    const [{ data: next }, { data: current }] = await Promise.all([
-      supabase
-        .from('queue_tickets')
-        .select('*')
-        .eq('assigned_barber_id', barberId)
-        .in('state', NEXT_CUSTOMER_STATES)
-        .order('position', { ascending: true, nullsFirst: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from('queue_tickets')
-        .select('*')
-        .eq('assigned_barber_id', barberId)
-        .eq('state', 'in_service')
-        .maybeSingle(),
-    ]);
+    const [{ data: next, error: nextError }, { data: current, error: currentError }] =
+      await Promise.all([
+        supabase
+          .from('queue_tickets')
+          .select('*')
+          .eq('assigned_barber_id', barberId)
+          .in('state', NEXT_CUSTOMER_STATES)
+          .order('position', { ascending: true, nullsFirst: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('queue_tickets')
+          .select('*')
+          .eq('assigned_barber_id', barberId)
+          .eq('state', 'in_service')
+          .maybeSingle(),
+      ]);
+    // An error here (RLS misconfiguration, network blip, or .maybeSingle() throwing because more
+    // than one in_service ticket somehow exists for this barber) must not be indistinguishable
+    // from the legitimate empty-queue state -- this task's whole premise is that the RLS fix might
+    // silently return zero rows, so the read path gets the same error visibility the write paths
+    // (handleAcknowledge, confirmNotPresent, handleSkip, handleMarkComplete) already have.
+    if (nextError || currentError) {
+      setError(t('actionFailed'));
+    }
     setNextTicket(next ?? null);
     setCurrentTicket(current ?? null);
   }
