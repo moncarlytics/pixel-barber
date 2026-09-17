@@ -88,5 +88,12 @@
     "walkInFailed": "Failed to create ticket.",
     "walkInInvalidPhone": "Enter a valid Ghana phone number (e.g. 024xxxxxxx).",
     "actionFailed": "Something went wrong. Please try again."
+  },
+  "BarbersManagement": {
+    "title": "Barbers",
+    "pinPlaceholder": "4-6 digit PIN",
+    "setPinButton": "Set/Rotate PIN",
+    "pinSetSuccess": "PIN updated",
+    "pinSetFailed": "Failed to update PIN"
   }
 }
