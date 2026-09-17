@@ -28,5 +28,11 @@ $$;
 
 revoke execute on function expire_no_show_grace_periods() from public, anon, authenticated;
 
+-- Controller fix: 'every 30 seconds' is not valid cron.schedule syntax and made the push fail
+-- outright (rolled back cleanly, confirmed via `supabase migration list` before this fix -- the
+-- original job was untouched). The already-live Phase 1 job (20260911211600_pg_cron_jobs.sql)
+-- uses the correct pg_cron sub-minute syntax, '30 seconds' with no "every" prefix -- the "every"
+-- wording came from the backend-schema doc's descriptive comment, not the doc's own actual SQL,
+-- and this migration mistakenly copied the comment's wording into the literal schedule string.
 select cron.unschedule('expire-no-show-grace-periods');
-select cron.schedule('expire-no-show-grace-periods', 'every 30 seconds', 'select expire_no_show_grace_periods();');
+select cron.schedule('expire-no-show-grace-periods', '30 seconds', 'select expire_no_show_grace_periods();');
