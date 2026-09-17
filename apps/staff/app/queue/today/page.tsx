@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, updateTicketWithVersion } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
+import NotPresentModal from './NotPresentModal';
 
 type Ticket = Database['public']['Tables']['queue_tickets']['Row'];
 type Barber = Database['public']['Tables']['barbers']['Row'];
@@ -167,11 +168,10 @@ export default function TodaysQueuePage() {
     await refetchQueue(myBarber.id);
   }
 
-  // Not Present: Task 6 owns the confirmation UI (a proper modal component). Until it exists, this
-  // opens a minimal inline confirm affordance (below, gated on notPresentTicketId) as a stopgap.
-  // The transition logic itself -- fetching no_show_grace_minutes and the updateTicketWithVersion
-  // call -- is the real, final logic and is NOT a stopgap: Task 6 should call confirmNotPresent (or
-  // inline its body) from its modal's onConfirm handler rather than rewriting it.
+  // Not Present: opens the NotPresentModal (Task 6), gated on notPresentTicketId matching the
+  // ticket. The transition logic itself -- fetching no_show_grace_minutes and the
+  // updateTicketWithVersion call in confirmNotPresent below -- is unchanged from Task 5; the modal
+  // just calls it from its Confirm button instead of an inline stopgap block.
   function requestNotPresent(ticket: Ticket) {
     setNotPresentTicketId(ticket.id);
   }
@@ -321,18 +321,11 @@ export default function TodaysQueuePage() {
             </button>
 
             {notPresentTicketId === nextTicket.id && (
-              // TODO: Task 6 replaces this inline confirm block with its real confirmation modal
-              // component. confirmNotPresent() above holds the actual grace-period transition logic
-              // and should be preserved/reused as-is -- only this confirmation UI is a stopgap.
-              <div role="alertdialog" aria-label={t('notPresentConfirmTitle')}>
-                <p>{t('notPresentConfirmPrompt')}</p>
-                <button type="button" onClick={() => confirmNotPresent(nextTicket)}>
-                  {t('confirmButton')}
-                </button>
-                <button type="button" onClick={cancelNotPresent}>
-                  {t('cancelButton')}
-                </button>
-              </div>
+              <NotPresentModal
+                ticket={nextTicket}
+                onConfirm={confirmNotPresent}
+                onCancel={cancelNotPresent}
+              />
             )}
           </div>
         ) : (
