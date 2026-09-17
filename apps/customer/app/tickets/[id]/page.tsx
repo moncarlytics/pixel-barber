@@ -84,14 +84,18 @@ export default function TicketTrackingPage() {
       cancelled_at: new Date().toISOString(),
     });
     if (!result.success) {
-      // PRD 34: the loser of a race sees the current state, not a silent overwrite or a raw error.
-      const { data: latest } = await supabase
-        .from('queue_tickets')
-        .select('*')
-        .eq('id', ticket.id)
-        .single();
-      setTicket(latest ?? ticket);
-      setError(t('conflictMessage'));
+      if (result.reason === 'conflict') {
+        // PRD 34: the loser of a race sees the current state, not a silent overwrite or a raw error.
+        const { data: latest } = await supabase
+          .from('queue_tickets')
+          .select('*')
+          .eq('id', ticket.id)
+          .single();
+        setTicket(latest ?? ticket);
+        setError(t('conflictMessage'));
+      } else {
+        setError(t('actionFailed'));
+      }
       setShowCancelSheet(false);
       return;
     }
@@ -149,17 +153,6 @@ export default function TicketTrackingPage() {
           </p>
           <button type="button" onClick={() => setShowCancelSheet(true)}>
             {t('cancelButton')}
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              updateTicketWithVersion(supabase, ticket.id, ticket.version, {
-                is_stepped_out: true,
-                stepped_out_at: new Date().toISOString(),
-              })
-            }
-          >
-            {t('stepOutButton')}
           </button>
         </>
       )}

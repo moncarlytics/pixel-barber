@@ -116,7 +116,6 @@
     "releasedReason": "because you weren't available in time",
     "rejoin": "Rejoin Queue",
     "cancelButton": "Cancel",
-    "stepOutButton": "Step Out",
     "cancelSheetTitle": "Why are you cancelling?",
     "reasonWaitTooLong": "Wait too long",
     "reasonCantMakeIt": "Can't make it",
@@ -126,6 +125,7 @@
     "reasonOther": "Other",
     "confirmCancel": "Confirm Cancellation",
     "backButton": "Back",
-    "conflictMessage": "This ticket was just updated — showing the latest state."
+    "conflictMessage": "This ticket was just updated — showing the latest state.",
+    "actionFailed": "Something went wrong. Please try again."
   }
 }

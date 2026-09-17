@@ -85,6 +85,8 @@
     "walkInBarber": "Barber preference (optional)",
     "walkInSubmit": "Create Ticket",
     "cancel": "Cancel",
-    "walkInFailed": "Failed to create ticket."
+    "walkInFailed": "Failed to create ticket.",
+    "walkInInvalidPhone": "Enter a valid Ghana phone number (e.g. 024xxxxxxx).",
+    "actionFailed": "Something went wrong. Please try again."
   }
 }

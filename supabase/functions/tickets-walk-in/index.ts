@@ -58,38 +58,38 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceRoleKey);
 
-  // Match-or-create by phone (PRD section 13) -- a walk-in customer may already have an account
-  // from a prior visit; a phone number is optional, in which case a fresh customer row is always
-  // created (no way to match without one).
-  let customerId: string;
-  if (phone_e164) {
-    const { data: existingCustomer } = await admin
-      .from('customers')
-      .select('id')
-      .eq('phone_e164', phone_e164)
-      .maybeSingle();
-    if (existingCustomer) {
-      customerId = existingCustomer.id;
+  try {
+    // Match-or-create by phone (PRD section 13) -- a walk-in customer may already have an account
+    // from a prior visit; a phone number is optional, in which case a fresh customer row is
+    // always created (no way to match without one).
+    let customerId: string;
+    if (phone_e164) {
+      const { data: existingCustomer } = await admin
+        .from('customers')
+        .select('id')
+        .eq('phone_e164', phone_e164)
+        .maybeSingle();
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+      } else {
+        const { data: newCustomer, error: createError } = await admin
+          .from('customers')
+          .insert({ name, phone_e164 })
+          .select('id')
+          .single();
+        if (createError) throw createError;
+        customerId = newCustomer.id;
+      }
     } else {
       const { data: newCustomer, error: createError } = await admin
         .from('customers')
-        .insert({ name, phone_e164 })
+        .insert({ name, phone_e164: null })
         .select('id')
         .single();
       if (createError) throw createError;
       customerId = newCustomer.id;
     }
-  } else {
-    const { data: newCustomer, error: createError } = await admin
-      .from('customers')
-      .insert({ name, phone_e164: null })
-      .select('id')
-      .single();
-    if (createError) throw createError;
-    customerId = newCustomer.id;
-  }
 
-  try {
     const { ticket, wasExisting } = await createTicketAtomic({
       admin,
       branchId: branch_id,

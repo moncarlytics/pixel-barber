@@ -93,7 +93,8 @@ export default function StaffTicketsPage() {
       cancel_reason: 'other',
       cancelled_at: new Date().toISOString(),
     });
-    if (!result.success) setError(t('conflictMessage'));
+    if (!result.success)
+      setError(result.reason === 'conflict' ? t('conflictMessage') : t('actionFailed'));
   }
 
   async function handleMarkArrived(ticket: Ticket) {
@@ -102,14 +103,20 @@ export default function StaffTicketsPage() {
       state: 'confirmed',
       confirmed_at: new Date().toISOString(),
     });
-    if (!result.success) setError(t('conflictMessage'));
+    if (!result.success)
+      setError(result.reason === 'conflict' ? t('conflictMessage') : t('actionFailed'));
   }
 
   async function handleBarberStatus(
     barber: Barber,
     status: Database['public']['Enums']['barber_status'],
   ) {
-    await supabase.from('barbers').update({ status }).eq('id', barber.id);
+    setError(null);
+    const { error: statusError } = await supabase
+      .from('barbers')
+      .update({ status })
+      .eq('id', barber.id);
+    if (statusError) setError(t('actionFailed'));
   }
 
   return (

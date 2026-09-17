@@ -1,10 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { updateTicketWithVersion } from './ticket-updates';
 
-function makeMockClient(
-  updateResult: { data: unknown; error: unknown },
-  refetchResult?: { data: unknown },
-) {
+function makeMockClient(updateResult: { data: unknown; error: unknown }) {
   return {
     from: () => ({
       update: () => ({
@@ -31,9 +28,18 @@ describe('updateTicketWithVersion', () => {
     if (result.success) expect(result.ticket.version).toBe(3);
   });
 
-  it('reports failure with no row affected when the version has already moved on', async () => {
+  it('reports a conflict with no row affected when the version has already moved on', async () => {
     const client = makeMockClient({ data: null, error: null });
     const result = await updateTicketWithVersion(client, 't1', 2, { state: 'cancelled' });
     expect(result.success).toBe(false);
+    if (!result.success) expect(result.reason).toBe('conflict');
+  });
+
+  it('reports a rejected failure with the error when the write itself is rejected (e.g. RLS)', async () => {
+    const rlsError = { message: 'new row violates row-level security policy', code: '42501' };
+    const client = makeMockClient({ data: null, error: rlsError });
+    const result = await updateTicketWithVersion(client, 't1', 2, { state: 'cancelled' });
+    expect(result.success).toBe(false);
+    if (!result.success && result.reason === 'rejected') expect(result.error).toEqual(rlsError);
   });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { createBrowserSupabaseClient } from '@pixel-barber/shared';
+import { createBrowserSupabaseClient, normalizeGhanaPhone } from '@pixel-barber/shared';
 
 interface ServiceOption {
   branchServiceId: string;
@@ -19,9 +19,11 @@ export default function AddWalkInModal({
   const t = useTranslations('LiveQueue');
   const supabase = createBrowserSupabaseClient();
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [barbers, setBarbers] = useState<{ id: string }[]>([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [serviceId, setServiceId] = useState('');
+  const [preferredBarberId, setPreferredBarberId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,36 +42,60 @@ export default function AddWalkInModal({
       });
   }, [branchId]);
 
+  useEffect(() => {
+    supabase
+      .from('barbers')
+      .select('id')
+      .eq('home_branch_id', branchId)
+      .then(({ data }) => setBarbers(data ?? []));
+  }, [branchId]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/tickets-walk-in`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          branch_id: branchId,
-          branch_service_id: serviceId,
-          name,
-          phone_e164: phone || null,
-        }),
-      },
-    );
-    setSubmitting(false);
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      setError(body.error ?? t('walkInFailed'));
-      return;
+
+    let normalizedPhone: string | null = null;
+    if (phone) {
+      normalizedPhone = normalizeGhanaPhone(phone);
+      if (!normalizedPhone) {
+        setError(t('walkInInvalidPhone'));
+        return;
+      }
     }
-    onClose();
+
+    setSubmitting(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/tickets-walk-in`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            branch_id: branchId,
+            branch_service_id: serviceId,
+            preferred_barber_id: preferredBarberId,
+            name,
+            phone_e164: normalizedPhone,
+          }),
+        },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setError(body.error ?? t('walkInFailed'));
+        return;
+      }
+      onClose();
+    } catch {
+      setError(t('walkInFailed'));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -93,6 +119,17 @@ export default function AddWalkInModal({
           {services.map((s) => (
             <option key={s.branchServiceId} value={s.branchServiceId}>
               {s.serviceName}
+            </option>
+          ))}
+        </select>
+        <select
+          value={preferredBarberId ?? ''}
+          onChange={(e) => setPreferredBarberId(e.target.value || null)}
+        >
+          <option value="">{t('walkInBarber')}</option>
+          {barbers.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.id}
             </option>
           ))}
         </select>
