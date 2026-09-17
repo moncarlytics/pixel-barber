@@ -1,12 +1,19 @@
 // supabase/functions/tickets-walk-in/index.ts
 import { createClient } from '@supabase/supabase-js';
 import { createTicketAtomic } from '../_shared/create-ticket.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders });
+  }
 
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return new Response('Missing Authorization', { status: 401 });
+  if (!authHeader)
+    return new Response('Missing Authorization', { status: 401, headers: corsHeaders });
 
   const url = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -16,26 +23,38 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: userData, error: userError } = await asCaller.auth.getUser();
-  if (userError || !userData.user) return new Response('Unauthorized', { status: 401 });
+  if (userError || !userData.user)
+    return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
   const { branch_id, branch_service_id, preferred_barber_id, name, phone_e164 } = body;
   if (!branch_id || !branch_service_id || !name) {
-    return new Response('branch_id, branch_service_id, and name are required', { status: 400 });
+    return new Response('branch_id, branch_service_id, and name are required', {
+      status: 400,
+      headers: corsHeaders,
+    });
   }
 
   // Reuse the exact same authorization logic RLS trusts (has_capability/in_branch_scope), called
   // via RPC as the caller so it reads the caller's own JWT claims -- never re-derived in Deno.
   const { data: canEdit } = await asCaller.rpc('has_capability', { cap: 'edit_tickets' });
   const { data: inScope } = await asCaller.rpc('in_branch_scope', { target_branch: branch_id });
-  if (!canEdit || !inScope) return new Response('Forbidden', { status: 403 });
+  if (!canEdit || !inScope) return new Response('Forbidden', { status: 403, headers: corsHeaders });
 
   const { data: staffRow } = await asCaller
     .from('staff_users')
     .select('id')
     .eq('auth_user_id', userData.user.id)
     .single();
-  if (!staffRow) return new Response('No staff record', { status: 403 });
+  if (!staffRow) return new Response('No staff record', { status: 403, headers: corsHeaders });
 
   const admin = createClient(url, serviceRoleKey);
 
@@ -82,12 +101,12 @@ Deno.serve(async (req) => {
     });
     return new Response(JSON.stringify({ ticket, wasExisting }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
