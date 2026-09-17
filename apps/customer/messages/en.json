@@ -96,6 +96,9 @@
     "reviewTitle": "Review & Confirm",
     "confirmJoin": "Join Now",
     "alreadyInQueue": "You're already in the queue for this branch.",
-    "viewTicket": "View My Ticket"
+    "viewTicket": "View My Ticket",
+    "notSignedIn": "Not signed in.",
+    "joinFailed": "Failed to join queue.",
+    "priceLabel": "— GHS {price}"
   }
 }

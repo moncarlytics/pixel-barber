@@ -71,7 +71,7 @@ export default function BookFlow() {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) {
-      setError('Not signed in.');
+      setError(t('notSignedIn'));
       setSubmitting(false);
       return;
     }
@@ -93,7 +93,7 @@ export default function BookFlow() {
     setSubmitting(false);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setError(body.error ?? 'Failed to join queue.');
+      setError(body.error ?? t('joinFailed'));
       return;
     }
     const { ticket } = await response.json();
@@ -121,7 +121,7 @@ export default function BookFlow() {
                   }}
                 >
                   {s.serviceName}
-                  {s.priceGhs !== null && ` — GHS ${s.priceGhs.toFixed(2)}`}
+                  {s.priceGhs !== null && ` ${t('priceLabel', { price: s.priceGhs.toFixed(2) })}`}
                 </button>
               </li>
             ))}
