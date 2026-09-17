@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient } from '@pixel-barber/shared';
 
@@ -45,6 +46,7 @@ export default function StaffLoginPage() {
         />
         <button type="submit">{t('logIn')}</button>
       </form>
+      <Link href="/login/pin">{t('pinLoginLink')}</Link>
     </main>
   );
 }

@@ -7,7 +7,16 @@
     "title": "Staff Login",
     "emailPlaceholder": "Email",
     "passwordPlaceholder": "Password",
-    "logIn": "Log In"
+    "logIn": "Log In",
+    "pinLoginLink": "Shared station? Log in with PIN"
+  },
+  "PinLogin": {
+    "title": "Barber PIN Login",
+    "branchLabel": "Branch",
+    "pinPlaceholder": "4-6 digit PIN",
+    "logIn": "Log In",
+    "invalidPin": "Invalid PIN. Please try again.",
+    "backToLoginLink": "Back to staff login"
   },
   "Tickets": {
     "title": "Branch Tickets"
