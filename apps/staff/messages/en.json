@@ -59,5 +59,32 @@
     "effectiveFrom": "Effective from",
     "updatePrice": "Update Price",
     "noBranchServices": "No services linked to this branch yet."
+  },
+  "LiveQueue": {
+    "branchLabel": "Branch",
+    "positionHeader": "Position",
+    "customerHeader": "Customer",
+    "serviceHeader": "Service",
+    "barberHeader": "Barber",
+    "waitHeader": "Wait",
+    "statusHeader": "Status",
+    "actionsHeader": "Actions",
+    "cancelAction": "Cancel",
+    "markArrivedAction": "Mark Arrived",
+    "gracePeriodAlert": "Grace period — needs attention",
+    "addWalkIn": "+ Add Walk-in",
+    "barberBoardTitle": "Barbers",
+    "statusAvailable": "Available",
+    "statusBreak": "Break",
+    "statusOffline": "Offline",
+    "conflictMessage": "This ticket was just updated by someone else — showing the latest state.",
+    "walkInModalTitle": "Add Walk-in",
+    "walkInName": "Name",
+    "walkInPhone": "Phone (optional)",
+    "walkInService": "Service",
+    "walkInBarber": "Barber preference (optional)",
+    "walkInSubmit": "Create Ticket",
+    "cancel": "Cancel",
+    "walkInFailed": "Failed to create ticket."
   }
 }
