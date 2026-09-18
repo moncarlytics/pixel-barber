@@ -39,20 +39,35 @@ beforeAll(async () => {
     .single();
   customerId = customer!.id;
 
-  const { data: branch } = await admin.from('branches').select('id').limit(1).single();
+  // Task 2: ticket creation now requires a real eligible barber (find_eligible_barber). Rather
+  // than adding a barber fixture onto the real shared "first branch" (which would race against
+  // any other concurrently-running test's own barber fixture there under CI's parallel file
+  // execution -- find_eligible_barber's fallback picks the least-busy eligible barber across the
+  // whole branch), this test gets its own dedicated branch, exactly like
+  // tests/db/find-eligible-barber.test.ts and tests/db/ticket-creation-barber-assignment.test.ts
+  // already do.
+  const { data: business } = await admin.from('businesses').select('id').limit(1).single();
+  const { data: service } = await admin.from('services').select('id').limit(1).single();
+  const { data: branch } = await admin
+    .from('branches')
+    .insert({
+      business_id: business!.id,
+      name: 'Duplicate Join Test Branch',
+      branch_code: `DUPJ${suffix % 100000}`,
+      address: 'Test',
+      latitude: 5.6,
+      longitude: -0.18,
+    })
+    .select()
+    .single();
   branchId = branch!.id;
   const { data: bs } = await admin
     .from('branch_services')
-    .select('id, service_id')
-    .eq('branch_id', branchId)
-    .limit(1)
+    .insert({ branch_id: branchId, service_id: service!.id })
+    .select()
     .single();
   branchServiceId = bs!.id;
 
-  // Task 2: ticket creation now requires a real eligible barber (find_eligible_barber), so this
-  // test's real shared branch needs one scheduled and skilled for the service being joined --
-  // otherwise the join is correctly rejected with 409 NO_BARBER_AVAILABLE before ever reaching
-  // the idempotency logic under test here.
   const barberEmail = `dupjoin-barber-${suffix}@test.pixelbarber.local`;
   const { data: barberAuth } = await admin.auth.admin.createUser({
     email: barberEmail,
@@ -78,7 +93,7 @@ beforeAll(async () => {
     .select()
     .single();
   barberId = barberRow!.id;
-  await admin.from('barber_skills').insert({ barber_id: barberId, service_id: bs!.service_id });
+  await admin.from('barber_skills').insert({ barber_id: barberId, service_id: service!.id });
   await admin.from('barber_schedule').insert({
     barber_id: barberId,
     work_date: new Date().toISOString().slice(0, 10),
@@ -110,6 +125,11 @@ afterAll(async () => {
   await admin.from('barbers').delete().eq('id', barberId);
   await admin.from('staff_users').delete().eq('id', barberStaffUserId);
   await admin.auth.admin.deleteUser(barberAuthUserId);
+  // tickets-join calls next_ticket_number, which upserts a branch_ticket_counters row with no
+  // cascade back to branches -- must go before the branch delete below, or it fails with a
+  // foreign-key violation.
+  await admin.from('branch_ticket_counters').delete().eq('branch_id', branchId);
+  await admin.from('branches').delete().eq('id', branchId);
 }, 30000);
 
 describe('duplicate join idempotency (PRD 34)', () => {
