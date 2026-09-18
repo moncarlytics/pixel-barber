@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-  const { branch_id, branch_service_id, preferred_barber_id } = body;
+  const { branch_id, branch_service_id, preferred_barber_id, accept_fallback } = body;
   if (!branch_id || !branch_service_id) {
     return new Response('branch_id and branch_service_id are required', {
       status: 400,
@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
       customerId: customer.id,
       branchServiceId: branch_service_id,
       preferredBarberId: preferred_barber_id ?? null,
+      acceptFallback: accept_fallback === true,
       createdBy: 'customer',
       createdByStaffId: null,
     });
@@ -69,7 +70,14 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
+    const message = (err as Error).message;
+    if (message === 'NO_BARBER_AVAILABLE') {
+      return new Response(JSON.stringify({ error: 'NO_BARBER_AVAILABLE' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -11,6 +11,7 @@ export interface CreateTicketParams {
   customerId: string;
   branchServiceId: string;
   preferredBarberId: string | null;
+  acceptFallback: boolean;
   createdBy: 'customer' | 'staff';
   createdByStaffId: string | null;
 }
@@ -22,6 +23,7 @@ export async function createTicketAtomic(params: CreateTicketParams) {
     customerId,
     branchServiceId,
     preferredBarberId,
+    acceptFallback,
     createdBy,
     createdByStaffId,
   } = params;
@@ -46,6 +48,30 @@ export async function createTicketAtomic(params: CreateTicketParams) {
   });
   if (numberError) throw numberError;
 
+  // Resolve who this ticket is actually going to, re-deriving fresh rather than trusting any
+  // earlier client-side pre-check (spec decision: assignment happens at join time).
+  const { data: eligibility, error: eligibilityError } = await admin.rpc('find_eligible_barber', {
+    p_branch_id: branchId,
+    p_branch_service_id: branchServiceId,
+    p_preferred_barber_id: preferredBarberId,
+  });
+  if (eligibilityError) throw eligibilityError;
+  const result = eligibility?.[0];
+
+  let assignedBarberId: string | null = null;
+  if (preferredBarberId && result?.preferred_eligible) {
+    assignedBarberId = preferredBarberId;
+  } else if (preferredBarberId && result?.preferred_scheduled_today && !acceptFallback) {
+    // Customer chose to wait specifically for their preferred barber.
+    assignedBarberId = preferredBarberId;
+  } else {
+    assignedBarberId = result?.fallback_barber_id ?? null;
+  }
+
+  if (!assignedBarberId) {
+    throw new Error('NO_BARBER_AVAILABLE');
+  }
+
   const { data: ticket, error: insertError } = await admin
     .from('queue_tickets')
     .insert({
@@ -54,6 +80,7 @@ export async function createTicketAtomic(params: CreateTicketParams) {
       customer_id: customerId,
       branch_service_id: branchServiceId,
       preferred_barber_id: preferredBarberId,
+      assigned_barber_id: assignedBarberId,
       state: 'waiting',
       created_by: createdBy,
       created_by_staff_id: createdByStaffId,

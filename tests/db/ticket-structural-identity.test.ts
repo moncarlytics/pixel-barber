@@ -39,6 +39,9 @@ describe('ticket structural identity across entry methods', () => {
   let selfServiceAccessToken: string;
   let staffAuthUserId: string;
   let staffUserId: string;
+  let barberId: string;
+  let barberStaffUserId: string;
+  let barberAuthUserId: string;
 
   beforeAll(async () => {
     const suffix = Date.now();
@@ -46,11 +49,49 @@ describe('ticket structural identity across entry methods', () => {
     branchId = branch!.id;
     const { data: bs } = await admin
       .from('branch_services')
-      .select('id')
+      .select('id, service_id')
       .eq('branch_id', branchId)
       .limit(1)
       .single();
     branchServiceId = bs!.id;
+
+    // Task 2: ticket creation now requires a real eligible barber (find_eligible_barber), so this
+    // test's real shared branch needs one scheduled and skilled for the service being joined --
+    // otherwise both requests below are correctly rejected with 409 NO_BARBER_AVAILABLE instead of
+    // producing tickets to compare.
+    const barberEmail = `structid-barber-${suffix}@test.pixelbarber.local`;
+    const { data: barberAuth } = await admin.auth.admin.createUser({
+      email: barberEmail,
+      password: 'Test-Password-123!',
+      email_confirm: true,
+    });
+    barberAuthUserId = barberAuth!.user.id;
+    const { data: barberStaff } = await admin
+      .from('staff_users')
+      .insert({
+        auth_user_id: barberAuthUserId,
+        name: 'Structural Identity Test Barber',
+        email: barberEmail,
+        role: 'barber',
+        invite_status: 'accepted',
+      })
+      .select()
+      .single();
+    barberStaffUserId = barberStaff!.id;
+    const { data: barberRow } = await admin
+      .from('barbers')
+      .insert({ staff_user_id: barberStaffUserId, home_branch_id: branchId, status: 'available' })
+      .select()
+      .single();
+    barberId = barberRow!.id;
+    await admin.from('barber_skills').insert({ barber_id: barberId, service_id: bs!.service_id });
+    await admin.from('barber_schedule').insert({
+      barber_id: barberId,
+      work_date: new Date().toISOString().slice(0, 10),
+      branch_id: branchId,
+      shift_start: '00:00:00',
+      shift_end: '23:59:59',
+    });
 
     const selfPhone = `+233${String(suffix).slice(-9)}`;
     const { data: selfUser } = await admin.auth.admin.createUser({
@@ -146,6 +187,11 @@ describe('ticket structural identity across entry methods', () => {
     await admin.from('staff_branch_assignments').delete().eq('staff_user_id', staffUserId);
     await admin.from('staff_users').delete().eq('id', staffUserId);
     await admin.auth.admin.deleteUser(staffAuthUserId);
+    await admin.from('barber_schedule').delete().eq('barber_id', barberId);
+    await admin.from('barber_skills').delete().eq('barber_id', barberId);
+    await admin.from('barbers').delete().eq('id', barberId);
+    await admin.from('staff_users').delete().eq('id', barberStaffUserId);
+    await admin.auth.admin.deleteUser(barberAuthUserId);
   }, 30000);
 
   it('produces identical ticket shape for a walk-in and a self-service ticket, except entry-method-specific fields', async () => {
