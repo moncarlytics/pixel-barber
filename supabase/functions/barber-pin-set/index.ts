@@ -83,9 +83,14 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    // Fix 3's PIN-collision check is a deliberate, safe `raise exception` message that's fine to
+    // surface verbatim -- but any other, unexpected exception (a constraint violation with raw
+    // column/table names, a connection error, etc.) must not leak past this boundary.
+    const message = (err as Error).message;
+    const isSafeMessage = message === 'This PIN is already in use by another barber at this branch';
+    return new Response(
+      JSON.stringify({ error: isSafeMessage ? message : 'Failed to update PIN' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 });

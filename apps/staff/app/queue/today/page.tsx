@@ -20,7 +20,7 @@ type Barber = Database['public']['Tables']['barbers']['Row'];
 type Branch = Database['public']['Tables']['branches']['Row'];
 type BarberStatus = Database['public']['Enums']['barber_status'];
 
-const NEXT_CUSTOMER_STATES = ['waiting', 'almost_turn'] as const;
+const NEXT_CUSTOMER_STATES = ['waiting', 'almost_turn', 'called', 'confirmed'] as const;
 
 export default function TodaysQueuePage() {
   const t = useTranslations('TodaysQueue');
@@ -95,6 +95,8 @@ export default function TodaysQueuePage() {
           .select('*')
           .eq('assigned_barber_id', barberId)
           .eq('state', 'in_service')
+          .order('service_started_at', { ascending: false })
+          .limit(1)
           .maybeSingle(),
       ]);
     // An error here (RLS misconfiguration, network blip, or .maybeSingle() throwing because more
@@ -129,6 +131,19 @@ export default function TodaysQueuePage() {
         },
         () => {
           if (!cancelled) refetchQueue(barberId);
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'barbers', filter: `id=eq.${barberId}` },
+        async () => {
+          if (cancelled) return;
+          const { data } = await supabase
+            .from('barbers')
+            .select('*')
+            .eq('id', barberId)
+            .maybeSingle();
+          if (!cancelled && data) setMyBarber(data);
         },
       )
       .subscribe();
@@ -186,7 +201,16 @@ export default function TodaysQueuePage() {
     if (!myBarber) return;
     setError(null);
     setNotPresentTicketId(null);
-    const graceMinutes = branch?.no_show_grace_minutes ?? 2;
+    // Derived from the ticket's own branch, not the barber's home branch: pin-login (Task 2)
+    // deliberately lets a barber log in at a covering branch via staff_branch_assignments, so
+    // `branch` (resolved from barberRow.home_branch_id at identity-resolution time) would silently
+    // read the wrong branch's grace-period setting for a floating barber covering a second location.
+    const { data: ticketBranch } = await supabase
+      .from('branches')
+      .select('no_show_grace_minutes')
+      .eq('id', ticket.branch_id)
+      .maybeSingle();
+    const graceMinutes = ticketBranch?.no_show_grace_minutes ?? 2;
     const expiresAt = new Date(Date.now() + graceMinutes * 60_000).toISOString();
     const result = await updateTicketWithVersion(supabase, ticket.id, ticket.version, {
       state: 'grace_period',
@@ -241,11 +265,13 @@ export default function TodaysQueuePage() {
       }
       return;
     }
-    const { error: sessionError } = await supabase
+    const { data: sessionUpdate, error: sessionError } = await supabase
       .from('service_sessions')
       .update({ ended_at: now })
-      .eq('ticket_id', ticket.id);
-    if (sessionError) setError(t('actionFailed'));
+      .eq('ticket_id', ticket.id)
+      .select()
+      .maybeSingle();
+    if (sessionError || !sessionUpdate) setError(t('actionFailed'));
     await refetchQueue(myBarber.id);
   }
 
@@ -323,7 +349,11 @@ export default function TodaysQueuePage() {
             <p>{t('ticketNumberLabel', { number: nextTicket.ticket_number })}</p>
             <p>{t('customerLabel', { id: nextTicket.customer_id })}</p>
             <p>{t('serviceLabel', { id: nextTicket.branch_service_id })}</p>
-            <button type="button" onClick={() => handleAcknowledge(nextTicket)}>
+            <button
+              type="button"
+              onClick={() => handleAcknowledge(nextTicket)}
+              disabled={!!currentTicket}
+            >
               {t('acknowledgeAction')}
             </button>
             <button type="button" onClick={() => requestNotPresent(nextTicket)}>

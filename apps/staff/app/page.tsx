@@ -11,7 +11,7 @@ export default function Home() {
       <Link href="/login">{t('logIn')}</Link>
       <Link href="/settings/branch">Branch Settings</Link>
       <Link href="/settings/services">Services & Pricing</Link>
-      <Link href="/settings/barbers">Barbers</Link>
+      <Link href="/settings/barbers">{t('barbersLink')}</Link>
     </main>
   );
 }

@@ -1,7 +1,8 @@
 {
   "Home": {
     "title": "Pixel Barber — Staff Portal",
-    "logIn": "Log in"
+    "logIn": "Log in",
+    "barbersLink": "Barbers"
   },
   "Login": {
     "title": "Staff Login",

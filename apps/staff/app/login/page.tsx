@@ -17,10 +17,32 @@ export default function StaffLoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (signInError) {
       setError(signInError.message);
       return;
+    }
+    // Route barbers to Today's Queue (Phase 5's own screen) instead of always landing on /tickets --
+    // previously only the PIN login path (login/pin/page.tsx) reached /queue/today, so a barber
+    // signing in with a password (App Flow 9.1's other login mode) had no path to this phase's screen.
+    const { data: staffUser } = await supabase
+      .from('staff_users')
+      .select('id')
+      .eq('auth_user_id', signInData.user!.id)
+      .maybeSingle();
+    if (staffUser) {
+      const { data: barberRow } = await supabase
+        .from('barbers')
+        .select('id')
+        .eq('staff_user_id', staffUser.id)
+        .maybeSingle();
+      if (barberRow) {
+        router.push('/queue/today');
+        return;
+      }
     }
     router.push('/tickets');
   }
