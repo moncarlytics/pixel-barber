@@ -56,4 +56,5 @@ begin
 end;
 $$;
 
-grant execute on function find_eligible_barber(uuid, uuid, uuid) to authenticated;
+revoke execute on function find_eligible_barber(uuid, uuid, uuid) from public, anon, authenticated;
+grant execute on function find_eligible_barber(uuid, uuid, uuid) to authenticated, service_role;
