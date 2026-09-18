@@ -129,7 +129,7 @@ describe('ticket structural identity across entry methods', () => {
     }).then((r) => r.json());
     walkInTicketId = walkInResponse.ticket.id;
     walkInCustomerId = walkInResponse.ticket.customer_id;
-  });
+  }, 30000);
 
   afterAll(async () => {
     await admin
@@ -146,7 +146,7 @@ describe('ticket structural identity across entry methods', () => {
     await admin.from('staff_branch_assignments').delete().eq('staff_user_id', staffUserId);
     await admin.from('staff_users').delete().eq('id', staffUserId);
     await admin.auth.admin.deleteUser(staffAuthUserId);
-  });
+  }, 30000);
 
   it('produces identical ticket shape for a walk-in and a self-service ticket, except entry-method-specific fields', async () => {
     const { data: selfTicket } = await admin
