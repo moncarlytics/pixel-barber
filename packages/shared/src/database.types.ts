@@ -1433,6 +1433,18 @@ export type Database = {
       auth_role: { Args: never; Returns: string };
       auth_staff_id: { Args: never; Returns: string };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };
+      find_eligible_barber: {
+        Args: {
+          p_branch_id: string;
+          p_branch_service_id: string;
+          p_preferred_barber_id: string | null;
+        };
+        Returns: {
+          preferred_eligible: boolean;
+          preferred_scheduled_today: boolean;
+          fallback_barber_id: string | null;
+        }[];
+      };
       has_capability: { Args: { cap: string }; Returns: boolean };
       in_branch_scope: { Args: { target_branch: string }; Returns: boolean };
       link_or_create_customer: {

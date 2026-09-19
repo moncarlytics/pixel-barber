@@ -99,7 +99,12 @@
     "viewTicket": "View My Ticket",
     "notSignedIn": "Not signed in.",
     "joinFailed": "Failed to join queue.",
-    "priceLabel": "— GHS {price}"
+    "priceLabel": "— GHS {price}",
+    "availabilityStepTitle": "Barber Availability",
+    "preferredBusyMessage": "This barber isn't available right now.",
+    "waitForPreferred": "Wait for this barber",
+    "takeNextAvailable": "Take next available",
+    "noBarberAvailable": "No barbers available for this service right now."
   },
   "TicketTracking": {
     "positionLabel": "Position in queue: {position}",

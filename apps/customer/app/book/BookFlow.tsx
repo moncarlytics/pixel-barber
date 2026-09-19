@@ -14,7 +14,7 @@ interface ServiceOption {
   priceGhs: number | null;
 }
 
-type Step = 'service' | 'barber' | 'review';
+type Step = 'service' | 'barber' | 'availability' | 'review';
 
 export default function BookFlow() {
   const t = useTranslations('Book');
@@ -30,6 +30,7 @@ export default function BookFlow() {
   const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null); // null = any available
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [acceptFallback, setAcceptFallback] = useState(false);
 
   useEffect(() => {
     if (!branchId) return;
@@ -63,6 +64,40 @@ export default function BookFlow() {
     load();
   }, [branchId]);
 
+  async function handleSelectBarber(barberId: string | null) {
+    setError(null);
+    if (barberId === null) {
+      setSelectedBarberId(null);
+      setAcceptFallback(false);
+      setStep('review');
+      return;
+    }
+    const { data, error: rpcError } = await supabase.rpc('find_eligible_barber', {
+      p_branch_id: branchId!,
+      p_branch_service_id: selectedServiceId,
+      p_preferred_barber_id: barberId,
+    });
+    if (rpcError) {
+      // Do not silently fall back on a transient failure; the customer stays on this step and can retry.
+      setError(t('joinFailed'));
+      return;
+    }
+    setSelectedBarberId(barberId);
+    setAcceptFallback(false);
+    const result = data?.[0];
+    if (result?.preferred_eligible) {
+      setStep('review');
+      return;
+    }
+    if (result?.preferred_scheduled_today) {
+      setStep('availability');
+      return;
+    }
+    // Not scheduled today at all -- no prompt, straight to the fallback barber (spec decision 2).
+    setAcceptFallback(true);
+    setStep('review');
+  }
+
   async function handleConfirmJoin() {
     if (!branchId || !selectedServiceId) return;
     setSubmitting(true);
@@ -87,13 +122,18 @@ export default function BookFlow() {
           branch_id: branchId,
           branch_service_id: selectedServiceId,
           preferred_barber_id: selectedBarberId,
+          accept_fallback: acceptFallback,
         }),
       },
     );
     setSubmitting(false);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setError(body.error ?? t('joinFailed'));
+      setError(
+        body.error === 'NO_BARBER_AVAILABLE'
+          ? t('noBarberAvailable')
+          : (body.error ?? t('joinFailed')),
+      );
       return;
     }
     const { ticket } = await response.json();
@@ -134,30 +174,43 @@ export default function BookFlow() {
           <h2>{t('barberStepTitle')}</h2>
           <ul>
             <li>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedBarberId(null);
-                  setStep('review');
-                }}
-              >
+              <button type="button" onClick={() => handleSelectBarber(null)}>
                 {t('anyAvailable')}
               </button>
             </li>
             {barbers.map((b) => (
               <li key={b.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedBarberId(b.id);
-                    setStep('review');
-                  }}
-                >
+                <button type="button" onClick={() => handleSelectBarber(b.id)}>
                   {b.id}
                 </button>
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {step === 'availability' && (
+        <div>
+          <h2>{t('availabilityStepTitle')}</h2>
+          <p>{t('preferredBusyMessage')}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setAcceptFallback(false);
+              setStep('review');
+            }}
+          >
+            {t('waitForPreferred')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAcceptFallback(true);
+              setStep('review');
+            }}
+          >
+            {t('takeNextAvailable')}
+          </button>
         </div>
       )}
 
