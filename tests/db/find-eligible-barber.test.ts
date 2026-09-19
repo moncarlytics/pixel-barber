@@ -180,7 +180,8 @@ beforeAll(async () => {
   await admin.from('barbers').update({ status: 'offline' }).eq('id', barbers.c.barberId);
   await admin.from('barbers').update({ status: 'on_break' }).eq('id', barbers.d.barberId);
 
-  // Give barber B two active tickets so barber A is the least-busy fallback.
+  // Create tickets to establish clear load ordering: A=0, D=1, B=2.
+  // This makes the least-busy test deterministic (A is strictly least busy).
   const { data: cust1 } = await admin
     .from('customers')
     .insert({ name: 'FEB Customer 1', phone_e164: `+233${String(suffix).slice(-8)}1` })
@@ -189,6 +190,11 @@ beforeAll(async () => {
   const { data: cust2 } = await admin
     .from('customers')
     .insert({ name: 'FEB Customer 2', phone_e164: `+233${String(suffix).slice(-8)}2` })
+    .select()
+    .single();
+  const { data: cust3 } = await admin
+    .from('customers')
+    .insert({ name: 'FEB Customer 3', phone_e164: `+233${String(suffix).slice(-8)}3` })
     .select()
     .single();
   await admin.from('queue_tickets').insert([
@@ -210,8 +216,17 @@ beforeAll(async () => {
       state: 'in_service',
       created_by: 'staff',
     },
+    {
+      ticket_number: `PB-FEB-3-${suffix}`,
+      branch_id: branchId,
+      customer_id: cust3!.id,
+      branch_service_id: branchServiceId,
+      assigned_barber_id: barbers.d.barberId,
+      state: 'waiting',
+      created_by: 'staff',
+    },
   ]);
-}, 30000);
+}, 60000);
 
 afterAll(async () => {
   await admin.from('queue_tickets').delete().eq('branch_id', branchId);
@@ -233,7 +248,7 @@ afterAll(async () => {
     await admin.auth.admin.deleteUser(b.authUserId);
   }
   await admin.from('branches').delete().eq('id', branchId);
-}, 30000);
+}, 60000);
 
 describe('find_eligible_barber', () => {
   it('excludes a barber with no barber_skills row for the service', async () => {
@@ -286,6 +301,9 @@ describe('find_eligible_barber', () => {
   });
 
   it('picks the least-busy eligible barber as the fallback', async () => {
+    // Ticket counts: A=0, D=1, B=2. Without this ordering, A and D would tie on active_count
+    // and fall through to barber_id uuid tie-break (random, ~50/50), making the test flaky.
+    // The single D ticket ensures A is strictly the least-busy fallback.
     const { data } = await admin.rpc('find_eligible_barber', {
       p_branch_id: branchId,
       p_branch_service_id: branchServiceId,
