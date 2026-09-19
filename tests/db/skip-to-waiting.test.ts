@@ -2,11 +2,12 @@
 // @vitest-environment node
 // Phase 5 Task 9 (Step 2): PRD 12.3's Skip action, tested exactly the way Today's Queue itself
 // performs it (apps/staff/app/queue/today/page.tsx's handleSkip) -- a real barber session calling
-// updateTicketWithVersion(supabase, ticketId, version, { skipped_at: now }) with no state change at
-// all. The repositioning is entirely Task 1's trg_ticket_state_changed_or_skip trigger (fired on
-// UPDATE OF skipped_at) plus recalculate_positions()'s `order by coalesce(skipped_at,
-// '-infinity'), created_at`: a skipped ticket keeps its 'waiting' state but sorts behind every
-// not-yet-skipped ticket in the same barber's queue, regardless of original arrival order.
+// updateTicketWithVersion(supabase, ticketId, version, { skipped_at: now }) with no direct state change
+// on the skipped ticket itself. The repositioning is entirely Task 1's trg_ticket_state_changed_or_skip
+// trigger (fired on UPDATE OF skipped_at) plus recalculate_positions()'s `order by coalesce(skipped_at,
+// '-infinity'), created_at`: a skipped ticket sorts behind every not-yet-skipped ticket. The resulting
+// reposition independently triggers Task 3's position-driven promotion: the ticket at position 1 becomes
+// 'called' (with notification), and position 2 becomes 'almost_turn'.
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -157,13 +158,14 @@ beforeAll(async () => {
 }, 30000);
 
 afterAll(async () => {
-  // FK-safe order (matches tests/db/shared-station-handoff.test.ts): queue_events before
+  // FK-safe order (matches tests/db/shared-station-handoff.test.ts): queue_events/notifications before
   // queue_tickets, tickets before customers/staff_users, staff_users before its auth user
   // (staff_users.auth_user_id is `on delete restrict`; deleting staff_users also cascades to the
   // barbers row), auth users before branches, branch last.
   for (const ticketId of [ticketAId, ticketBId]) {
     await admin.from('queue_events').delete().eq('ticket_id', ticketId);
   }
+  await admin.from('notifications').delete().in('related_ticket_id', [ticketAId, ticketBId]);
   for (const ticketId of [ticketAId, ticketBId]) {
     await admin.from('queue_tickets').delete().eq('id', ticketId);
   }
@@ -178,7 +180,7 @@ afterAll(async () => {
 }, 30000);
 
 describe('Skip -> Waiting (PRD 12.3)', () => {
-  it("skipping ticket A leaves its state as 'waiting' but moves it behind ticket B, without restarting the no-show escalation", async () => {
+  it("skipping ticket A moves it behind ticket B, triggering position-based promotion: ticket B becomes 'called' with notification, ticket A becomes 'almost_turn'", async () => {
     const { data: ticketABefore } = await admin
       .from('queue_tickets')
       .select('version')
@@ -195,7 +197,7 @@ describe('Skip -> Waiting (PRD 12.3)', () => {
       .select('state, position, skipped_at')
       .eq('id', ticketAId)
       .single();
-    expect(ticketAAfter!.state).toBe('waiting');
+    expect(ticketAAfter!.state).toBe('almost_turn');
     expect(ticketAAfter!.skipped_at).not.toBeNull();
     expect(ticketAAfter!.position).toBe(2);
 
@@ -204,7 +206,15 @@ describe('Skip -> Waiting (PRD 12.3)', () => {
       .select('state, position')
       .eq('id', ticketBId)
       .single();
-    expect(ticketBAfter!.state).toBe('waiting');
+    expect(ticketBAfter!.state).toBe('called');
     expect(ticketBAfter!.position).toBe(1);
+
+    const { data: notificationsB } = await admin
+      .from('notifications')
+      .select('id, recipient_id')
+      .eq('related_ticket_id', ticketBId)
+      .eq('notification_type', 'your_turn');
+    expect(notificationsB).toHaveLength(1);
+    expect(notificationsB![0].recipient_id).toBe(customerBId);
   });
 });
