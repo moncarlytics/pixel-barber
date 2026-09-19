@@ -28,6 +28,16 @@ let barberAuthUserId: string;
 const customerIds: string[] = [];
 const ticketIds: string[] = [];
 
+let ticket1Id: string;
+let ticket2Id: string;
+let ticket3Id: string;
+let customer1Id: string;
+let customer2Id: string;
+let customer3Id: string;
+
+let ticket4Id: string;
+let customer4Id: string;
+
 async function makeCustomerAndTicket(
   label: string,
   position: number,
@@ -124,9 +134,12 @@ afterAll(async () => {
 
 describe('recalculate_positions position-derived state promotion', () => {
   it('promotes position 1 to called (with one notification) and position 2 to almost_turn, leaving 3+ waiting', async () => {
-    const ticket1 = await makeCustomerAndTicket('1', 1);
-    const ticket2 = await makeCustomerAndTicket('2', 2);
-    const ticket3 = await makeCustomerAndTicket('3', 3);
+    ticket1Id = await makeCustomerAndTicket('1', 1);
+    ticket2Id = await makeCustomerAndTicket('2', 2);
+    ticket3Id = await makeCustomerAndTicket('3', 3);
+    customer1Id = customerIds[customerIds.length - 3];
+    customer2Id = customerIds[customerIds.length - 2];
+    customer3Id = customerIds[customerIds.length - 1];
 
     const { error } = await admin.rpc('recalculate_positions', {
       p_branch_id: branchId,
@@ -137,33 +150,105 @@ describe('recalculate_positions position-derived state promotion', () => {
     const { data: rows } = await admin
       .from('queue_tickets')
       .select('id, state')
-      .in('id', [ticket1, ticket2, ticket3]);
+      .in('id', [ticket1Id, ticket2Id, ticket3Id]);
     const stateById = Object.fromEntries(rows!.map((r) => [r.id, r.state]));
-    expect(stateById[ticket1]).toBe('called');
-    expect(stateById[ticket2]).toBe('almost_turn');
-    expect(stateById[ticket3]).toBe('waiting');
+    expect(stateById[ticket1Id]).toBe('called');
+    expect(stateById[ticket2Id]).toBe('almost_turn');
+    expect(stateById[ticket3Id]).toBe('waiting');
 
     const { data: notifications } = await admin
       .from('notifications')
       .select('id')
-      .eq('related_ticket_id', ticket1)
+      .eq('related_ticket_id', ticket1Id)
       .eq('notification_type', 'your_turn');
     expect(notifications).toHaveLength(1);
   });
 
-  it('does not re-notify on a second call once a ticket is already called', async () => {
-    const ticket = ticketIds[0]; // already 'called' from the previous test
+  it('a second recalculation does not promote another ticket to called', async () => {
     const { error } = await admin.rpc('recalculate_positions', {
       p_branch_id: branchId,
       p_barber_id: barberId,
     });
     expect(error).toBeNull();
 
-    const { data: notifications } = await admin
+    const { data: rows } = await admin
+      .from('queue_tickets')
+      .select('id, state')
+      .in('id', [ticket1Id, ticket2Id, ticket3Id]);
+    const stateById = Object.fromEntries(rows!.map((r) => [r.id, r.state]));
+    expect(stateById[ticket1Id]).toBe('called');
+    expect(stateById[ticket2Id]).toBe('almost_turn');
+    expect(stateById[ticket3Id]).toBe('waiting');
+
+    const { data: notif1 } = await admin
       .from('notifications')
       .select('id')
-      .eq('related_ticket_id', ticket)
+      .eq('related_ticket_id', ticket1Id)
       .eq('notification_type', 'your_turn');
-    expect(notifications).toHaveLength(1); // still exactly one, not two
+    expect(notif1).toHaveLength(1);
+
+    const { data: notif2 } = await admin
+      .from('notifications')
+      .select('id')
+      .eq('related_ticket_id', ticket2Id)
+      .eq('notification_type', 'your_turn');
+    expect(notif2).toHaveLength(0);
+
+    const { data: notif3 } = await admin
+      .from('notifications')
+      .select('id')
+      .eq('related_ticket_id', ticket3Id)
+      .eq('notification_type', 'your_turn');
+    expect(notif3).toHaveLength(0);
+
+    const { data: calledTickets } = await admin
+      .from('queue_tickets')
+      .select('id')
+      .eq('branch_id', branchId)
+      .eq('assigned_barber_id', barberId)
+      .eq('state', 'called');
+    expect(calledTickets).toHaveLength(1);
+  });
+
+  it('a ticket joining behind a called ticket does not disturb the head of the queue', async () => {
+    ticket4Id = await makeCustomerAndTicket('4', null, 'waiting');
+    customer4Id = customerIds[customerIds.length - 1];
+
+    const { error } = await admin.rpc('recalculate_positions', {
+      p_branch_id: branchId,
+      p_barber_id: barberId,
+    });
+    expect(error).toBeNull();
+
+    const { data: ticket1After } = await admin
+      .from('queue_tickets')
+      .select('state, position')
+      .eq('id', ticket1Id)
+      .single();
+    expect(ticket1After!.state).toBe('called');
+    expect(ticket1After!.position).toBe(1);
+
+    const { data: ticket4After } = await admin
+      .from('queue_tickets')
+      .select('state, position')
+      .eq('id', ticket4Id)
+      .single();
+    expect(ticket4After!.state).toBe('waiting');
+    expect(ticket4After!.position).toBe(4);
+
+    const { data: calledTickets } = await admin
+      .from('queue_tickets')
+      .select('id')
+      .eq('branch_id', branchId)
+      .eq('assigned_barber_id', barberId)
+      .eq('state', 'called');
+    expect(calledTickets).toHaveLength(1);
+
+    const { data: notif4 } = await admin
+      .from('notifications')
+      .select('id')
+      .eq('related_ticket_id', ticket4Id)
+      .eq('notification_type', 'your_turn');
+    expect(notif4).toHaveLength(0);
   });
 });
