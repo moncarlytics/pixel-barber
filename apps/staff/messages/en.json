@@ -96,6 +96,10 @@
     "walkInSubmit": "Create Ticket",
     "cancel": "Cancel",
     "walkInFailed": "Failed to create ticket.",
+    "walkInAvailabilityPrompt": "This barber isn't available right now.",
+    "walkInWaitForPreferred": "Wait for this barber",
+    "walkInTakeNextAvailable": "Take next available",
+    "walkInNoBarberAvailable": "No barbers available for this service right now.",
     "walkInInvalidPhone": "Enter a valid Ghana phone number (e.g. 024xxxxxxx).",
     "actionFailed": "Something went wrong. Please try again."
   },

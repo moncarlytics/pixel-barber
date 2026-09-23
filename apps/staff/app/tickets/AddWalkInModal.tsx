@@ -24,6 +24,8 @@ export default function AddWalkInModal({
   const [phone, setPhone] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [preferredBarberId, setPreferredBarberId] = useState<string | null>(null);
+  const [acceptFallback, setAcceptFallback] = useState(false);
+  const [needsAvailabilityPrompt, setNeedsAvailabilityPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -49,6 +51,38 @@ export default function AddWalkInModal({
       .eq('home_branch_id', branchId)
       .then(({ data }) => setBarbers(data ?? []));
   }, [branchId]);
+
+  async function handleBarberChange(rawValue: string) {
+    setError(null);
+    const resolvedId = rawValue || null;
+    if (!resolvedId || !serviceId) {
+      setPreferredBarberId(resolvedId);
+      setAcceptFallback(false);
+      setNeedsAvailabilityPrompt(false);
+      return;
+    }
+    const { data, error: rpcError } = await supabase.rpc('find_eligible_barber', {
+      p_branch_id: branchId,
+      p_branch_service_id: serviceId,
+      p_preferred_barber_id: resolvedId,
+    });
+    if (rpcError) {
+      // Do not silently fall back on a transient failure; leave the prior selection/prompt
+      // state alone so the manager can retry.
+      setError(t('walkInFailed'));
+      return;
+    }
+    setPreferredBarberId(resolvedId);
+    setAcceptFallback(false);
+    setNeedsAvailabilityPrompt(false);
+    const result = data?.[0];
+    if (result?.preferred_eligible) return;
+    if (result?.preferred_scheduled_today) {
+      setNeedsAvailabilityPrompt(true);
+    } else {
+      setAcceptFallback(true);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,6 +114,7 @@ export default function AddWalkInModal({
             branch_id: branchId,
             branch_service_id: serviceId,
             preferred_barber_id: preferredBarberId,
+            accept_fallback: acceptFallback,
             name,
             phone_e164: normalizedPhone,
           }),
@@ -87,7 +122,11 @@ export default function AddWalkInModal({
       );
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        setError(body.error ?? t('walkInFailed'));
+        setError(
+          body.error === 'NO_BARBER_AVAILABLE'
+            ? t('walkInNoBarberAvailable')
+            : (body.error ?? t('walkInFailed')),
+        );
         return;
       }
       onClose();
@@ -124,7 +163,7 @@ export default function AddWalkInModal({
         </select>
         <select
           value={preferredBarberId ?? ''}
-          onChange={(e) => setPreferredBarberId(e.target.value || null)}
+          onChange={(e) => handleBarberChange(e.target.value)}
         >
           <option value="">{t('walkInBarber')}</option>
           {barbers.map((b) => (
@@ -133,6 +172,29 @@ export default function AddWalkInModal({
             </option>
           ))}
         </select>
+        {needsAvailabilityPrompt && (
+          <div role="group" aria-label={t('walkInAvailabilityPrompt')}>
+            <p>{t('walkInAvailabilityPrompt')}</p>
+            <label>
+              <input
+                type="radio"
+                name="walkInFallbackChoice"
+                checked={!acceptFallback}
+                onChange={() => setAcceptFallback(false)}
+              />
+              {t('walkInWaitForPreferred')}
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="walkInFallbackChoice"
+                checked={acceptFallback}
+                onChange={() => setAcceptFallback(true)}
+              />
+              {t('walkInTakeNextAvailable')}
+            </label>
+          </div>
+        )}
         <button type="submit" disabled={submitting}>
           {t('walkInSubmit')}
         </button>
