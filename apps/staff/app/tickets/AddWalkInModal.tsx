@@ -52,37 +52,43 @@ export default function AddWalkInModal({
       .then(({ data }) => setBarbers(data ?? []));
   }, [branchId]);
 
-  async function handleBarberChange(rawValue: string) {
-    setError(null);
-    const resolvedId = rawValue || null;
-    if (!resolvedId || !serviceId) {
-      setPreferredBarberId(resolvedId);
+  useEffect(() => {
+    let cancelled = false;
+    async function checkEligibility() {
+      if (!preferredBarberId || !serviceId) {
+        setAcceptFallback(false);
+        setNeedsAvailabilityPrompt(false);
+        return;
+      }
+      setError(null);
+      const { data, error: rpcError } = await supabase.rpc('find_eligible_barber', {
+        p_branch_id: branchId,
+        p_branch_service_id: serviceId,
+        p_preferred_barber_id: preferredBarberId,
+      });
+      if (cancelled) return;
+      if (rpcError) {
+        // Do not silently fall back on a transient failure; leave the prior prompt/choice state
+        // alone so the manager can retry (e.g. by re-selecting the barber).
+        setError(t('walkInFailed'));
+        return;
+      }
       setAcceptFallback(false);
       setNeedsAvailabilityPrompt(false);
-      return;
+      const result = data?.[0];
+      if (result?.preferred_eligible) return;
+      if (result?.preferred_scheduled_today) {
+        setNeedsAvailabilityPrompt(true);
+      } else {
+        setAcceptFallback(true);
+      }
     }
-    const { data, error: rpcError } = await supabase.rpc('find_eligible_barber', {
-      p_branch_id: branchId,
-      p_branch_service_id: serviceId,
-      p_preferred_barber_id: resolvedId,
-    });
-    if (rpcError) {
-      // Do not silently fall back on a transient failure; leave the prior selection/prompt
-      // state alone so the manager can retry.
-      setError(t('walkInFailed'));
-      return;
-    }
-    setPreferredBarberId(resolvedId);
-    setAcceptFallback(false);
-    setNeedsAvailabilityPrompt(false);
-    const result = data?.[0];
-    if (result?.preferred_eligible) return;
-    if (result?.preferred_scheduled_today) {
-      setNeedsAvailabilityPrompt(true);
-    } else {
-      setAcceptFallback(true);
-    }
-  }
+    checkEligibility();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceId, preferredBarberId, branchId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -163,7 +169,7 @@ export default function AddWalkInModal({
         </select>
         <select
           value={preferredBarberId ?? ''}
-          onChange={(e) => handleBarberChange(e.target.value)}
+          onChange={(e) => setPreferredBarberId(e.target.value || null)}
         >
           <option value="">{t('walkInBarber')}</option>
           {barbers.map((b) => (

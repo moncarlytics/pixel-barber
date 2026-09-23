@@ -43,13 +43,10 @@ export async function createTicketAtomic(params: CreateTicketParams) {
     return { ticket: existing, wasExisting: true };
   }
 
-  const { data: ticketNumber, error: numberError } = await admin.rpc('next_ticket_number', {
-    p_branch_id: branchId,
-  });
-  if (numberError) throw numberError;
-
   // Resolve who this ticket is actually going to, re-deriving fresh rather than trusting any
-  // earlier client-side pre-check (spec decision: assignment happens at join time).
+  // earlier client-side pre-check (spec decision: assignment happens at join time). This runs
+  // BEFORE next_ticket_number so a NO_BARBER_AVAILABLE refusal never burns a visible,
+  // customer-facing ticket number.
   const { data: eligibility, error: eligibilityError } = await admin.rpc('find_eligible_barber', {
     p_branch_id: branchId,
     p_branch_service_id: branchServiceId,
@@ -71,6 +68,11 @@ export async function createTicketAtomic(params: CreateTicketParams) {
   if (!assignedBarberId) {
     throw new Error('NO_BARBER_AVAILABLE');
   }
+
+  const { data: ticketNumber, error: numberError } = await admin.rpc('next_ticket_number', {
+    p_branch_id: branchId,
+  });
+  if (numberError) throw numberError;
 
   const { data: ticket, error: insertError } = await admin
     .from('queue_tickets')
@@ -103,6 +105,15 @@ export async function createTicketAtomic(params: CreateTicketParams) {
     }
     throw insertError;
   }
+
+  // Make the freshly-assigned barber's queue re-derive position/state immediately -- otherwise
+  // an idle barber's very first ticket sits stuck at 'waiting' forever, since the only trigger
+  // that calls recalculate_positions fires on a later state/skipped_at change, which may never
+  // happen for a barber with an empty queue.
+  await admin.rpc('recalculate_positions', {
+    p_branch_id: branchId,
+    p_barber_id: assignedBarberId,
+  });
 
   await admin.from('queue_events').insert({
     ticket_id: ticket.id,
