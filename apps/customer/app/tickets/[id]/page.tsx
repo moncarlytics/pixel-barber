@@ -145,11 +145,11 @@ export default function TicketTrackingPage() {
           <p>
             {ticket.state === 'almost_turn'
               ? t('stateAlmostTurn')
-              : ticket.state === 'called' ||
-                  ticket.state === 'confirmed' ||
-                  ticket.state === 'in_service'
-                ? t('stateCalled')
-                : t('stateWaiting')}
+              : ticket.state === 'called'
+                ? t('stateCalledNow')
+                : ticket.state === 'confirmed' || ticket.state === 'in_service'
+                  ? t('stateBeingServed')
+                  : t('stateWaiting')}
           </p>
           <button type="button" onClick={() => setShowCancelSheet(true)}>
             {t('cancelButton')}
