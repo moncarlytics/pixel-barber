@@ -149,12 +149,17 @@ describe('recalculate_positions position-derived state promotion', () => {
 
     const { data: rows } = await admin
       .from('queue_tickets')
-      .select('id, state')
+      .select('id, state, called_at')
       .in('id', [ticket1Id, ticket2Id, ticket3Id]);
     const stateById = Object.fromEntries(rows!.map((r) => [r.id, r.state]));
     expect(stateById[ticket1Id]).toBe('called');
     expect(stateById[ticket2Id]).toBe('almost_turn');
     expect(stateById[ticket3Id]).toBe('waiting');
+
+    // Final review Problem 4: a position-driven promotion to 'called' must set called_at too,
+    // not just state -- previously only the manual staff Acknowledge action set it.
+    const ticket1Row = rows!.find((r) => r.id === ticket1Id);
+    expect(ticket1Row!.called_at).not.toBeNull();
 
     const { data: notifications } = await admin
       .from('notifications')

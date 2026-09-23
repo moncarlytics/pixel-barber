@@ -19,13 +19,28 @@ const admin = createClient<Database>(url, serviceRoleKey, {
 const suffix = Date.now();
 const today = new Date().toISOString().slice(0, 10);
 
-// A shift window guaranteed NOT to cover the current wall-clock time, for the "outside shift
-// hours" case -- computed relative to "now" rather than hardcoded, so this test isn't flaky
-// depending on what time it happens to run.
+// A shift window guaranteed NOT to cover the current wall-clock time, but that has NOT yet
+// ended either, for the "outside shift hours (shift is later today)" case -- computed relative
+// to "now" rather than hardcoded, so this test isn't flaky depending on what time it happens to
+// run. Starting a few minutes from now and running to the end of the day (rather than the
+// original fixed 1-hour-window-5-hours-out approach) avoids wrapping past midnight, which used
+// to make shift_end look like it was already in the past (as a bare TIME, with no date
+// component) whenever "now" was within 5 hours of midnight -- exactly the ambiguity
+// find_eligible_barber's new "shift hasn't already ended" check now cares about.
 const now = new Date();
-const outsideHour = (now.getHours() + 5) % 24;
-const outsideStart = `${String(outsideHour).padStart(2, '0')}:00:00`;
-const outsideEnd = `${String((outsideHour + 1) % 24).padStart(2, '0')}:00:00`;
+const startMinutes = Math.min(now.getHours() * 60 + now.getMinutes() + 5, 23 * 60 + 58);
+const outsideStart = `${String(Math.floor(startMinutes / 60)).padStart(2, '0')}:${String(
+  startMinutes % 60,
+).padStart(2, '0')}:00`;
+const outsideEnd = '23:59:59';
+
+// A shift that has ALREADY ENDED as of "now" (final review Problem 2: find_eligible_barber must
+// treat an ended shift as making the barber no longer "scheduled today" for wait-vs-fallback
+// purposes) -- also computed relative to "now" to avoid a hardcoded, flaky time.
+const endedMinutes = Math.max(now.getHours() * 60 + now.getMinutes() - 5, 1);
+const endedShiftEnd = `${String(Math.floor(endedMinutes / 60)).padStart(2, '0')}:${String(
+  endedMinutes % 60,
+).padStart(2, '0')}:00`;
 
 let branchId: string;
 let branchServiceId: string; // barbers ARE skilled for this one
@@ -119,6 +134,8 @@ beforeAll(async () => {
   barbers.f = await makeBarber('f');
   // Barber G: scheduled and available, but has NO barber_skills row for this service.
   barbers.g = await makeBarber('g');
+  // Barber H: skilled, but their shift for today has ALREADY ENDED (final review Problem 2).
+  barbers.h = await makeBarber('h');
 
   await admin.from('barber_skills').insert([
     { barber_id: barbers.a.barberId, service_id: serviceId },
@@ -129,6 +146,7 @@ beforeAll(async () => {
     { barber_id: barbers.f.barberId, service_id: serviceId },
     // g deliberately has no barber_skills row for `serviceId` -- only `otherServiceId`.
     { barber_id: barbers.g.barberId, service_id: otherServiceId },
+    { barber_id: barbers.h.barberId, service_id: serviceId },
   ]);
 
   await admin.from('barber_schedule').insert([
@@ -174,6 +192,13 @@ beforeAll(async () => {
       branch_id: branchId,
       shift_start: '00:00:00',
       shift_end: '23:59:59',
+    },
+    {
+      barber_id: barbers.h.barberId,
+      work_date: today,
+      branch_id: branchId,
+      shift_start: '00:00:00',
+      shift_end: endedShiftEnd,
     },
   ]);
 
@@ -295,6 +320,33 @@ describe('find_eligible_barber', () => {
       p_branch_id: branchId,
       p_branch_service_id: branchServiceId,
       p_preferred_barber_id: barbers.f.barberId,
+    });
+    expect(data![0].preferred_eligible).toBe(false);
+    expect(data![0].preferred_scheduled_today).toBe(false);
+  });
+
+  it('reports preferred_scheduled_today = false for a scheduled barber who lacks the skill (final review Problem 2)', async () => {
+    // g has a barber_schedule row for branchServiceId's branch/date but no barber_skills row for
+    // `serviceId` (only for `otherServiceId`) -- before this fix, a schedule-row-only check would
+    // have wrongly reported preferred_scheduled_today = true here.
+    const { data } = await admin.rpc('find_eligible_barber', {
+      p_branch_id: branchId,
+      p_branch_service_id: branchServiceId,
+      p_preferred_barber_id: barbers.g.barberId,
+    });
+    expect(data![0].preferred_eligible).toBe(false);
+    expect(data![0].preferred_scheduled_today).toBe(false);
+  });
+
+  it('reports preferred_scheduled_today = false for a barber whose shift has already ended (final review Problem 2)', async () => {
+    // h is skilled and has a schedule row for today, but shift_end is a few minutes in the past --
+    // before this fix, a schedule-row-only check would have wrongly reported
+    // preferred_scheduled_today = true here, offering "wait for this barber" for someone who can
+    // never become eligible again today.
+    const { data } = await admin.rpc('find_eligible_barber', {
+      p_branch_id: branchId,
+      p_branch_service_id: branchServiceId,
+      p_preferred_barber_id: barbers.h.barberId,
     });
     expect(data![0].preferred_eligible).toBe(false);
     expect(data![0].preferred_scheduled_today).toBe(false);
