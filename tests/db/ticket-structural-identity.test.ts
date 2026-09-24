@@ -14,8 +14,10 @@ const admin = createClient<Database>(url, serviceRoleKey, {
 });
 
 // PRD 12.1: "All three [entry methods] produce the same kind of ticket, tracked identically from
-// that point on." Columns that legitimately differ by entry method (created_by/created_by_staff_id,
-// customer_id itself) are excluded from the equality check; everything else must match shape.
+// that point on." Columns excluded from the equality check: those that differ by entry method
+// (created_by/created_by_staff_id, customer_id itself) and those derived from a ticket's position
+// in its barber's queue (state, position, called_at), which are assigned by the position-driven
+// queue promotion logic, not the entry method.
 const IGNORED_KEYS = new Set([
   'id',
   'ticket_number',
@@ -25,6 +27,9 @@ const IGNORED_KEYS = new Set([
   'created_at',
   'updated_at',
   'version',
+  'state',
+  'position',
+  'called_at',
 ]);
 
 describe('ticket structural identity across entry methods', () => {
