@@ -28,6 +28,9 @@ export default function BarberDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoadError(false);
+    setLoaded(false);
+    setBarber(null);
     Promise.all([supabase.rpc('list_manageable_barbers'), loadManageableBranches(supabase)])
       .then(([{ data, error }, manageable]) => {
         if (cancelled) return;
