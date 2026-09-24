@@ -1,32 +1,38 @@
 // apps/staff/app/settings/barbers/page.tsx
-// Minimal slice of App Flow 8.9 -- only what's needed to unblock PIN set/rotate this phase. The
-// full Barbers Management screen (skill matrix, schedule, floating branch assignment, add/edit
-// Barber Detail) is real, un-owned scope flagged to the user separately, not built here.
+// Barbers Management list (App Flow 8.9): barbers the signed-in Owner/Branch Manager may manage,
+// with name, status and home branch, the existing PIN set/rotate control, and a link to each
+// barber's schedule & skills screen.
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
 
-type Barber = Database['public']['Tables']['barbers']['Row'];
+type ManageableBarber =
+  Database['public']['Functions']['list_manageable_barbers']['Returns'][number];
 
 export default function BarbersManagementPage() {
   const t = useTranslations('BarbersManagement');
   const supabase = createBrowserSupabaseClient();
-  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [barbers, setBarbers] = useState<ManageableBarber[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
   const [statusByBarber, setStatusByBarber] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    supabase
-      .from('barbers')
-      .select('*')
-      .then(({ data }) => setBarbers(data ?? []));
+    supabase.rpc('list_manageable_barbers').then(({ data, error }) => {
+      if (error) setLoadError(true);
+      setBarbers(data ?? []);
+      setLoaded(true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSetPin(barber: Barber) {
-    const pin = pinInputs[barber.id];
+  async function handleSetPin(barber: ManageableBarber) {
+    const pin = pinInputs[barber.barber_id];
     if (!pin) return;
     const {
       data: { session },
@@ -44,25 +50,32 @@ export default function BarbersManagementPage() {
     );
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setStatusByBarber((s) => ({ ...s, [barber.id]: body.error ?? t('pinSetFailed') }));
+      setStatusByBarber((s) => ({ ...s, [barber.barber_id]: body.error ?? t('pinSetFailed') }));
       return;
     }
-    setStatusByBarber((s) => ({ ...s, [barber.id]: t('pinSetSuccess') }));
-    setPinInputs((p) => ({ ...p, [barber.id]: '' }));
+    setStatusByBarber((s) => ({ ...s, [barber.barber_id]: t('pinSetSuccess') }));
+    setPinInputs((p) => ({ ...p, [barber.barber_id]: '' }));
   }
 
   return (
     <main>
       <h1>{t('title')}</h1>
+      {loadError && <p role="alert">{t('loadFailed')}</p>}
+      {loaded && !loadError && barbers.length === 0 && <p>{t('noBarbers')}</p>}
       <ul>
         {barbers.map((barber) => (
-          <li key={barber.id}>
-            {barber.id} — {barber.status}
-            {statusByBarber[barber.id] && <span role="status"> {statusByBarber[barber.id]}</span>}
+          <li key={barber.barber_id}>
+            <strong>{barber.name}</strong>
+            <span> {t('statusLabel', { status: barber.status })}</span>
+            <span> {t('homeBranchLabel', { branch: barber.home_branch_name })}</span>
+            <Link href={`/settings/barbers/${barber.barber_id}`}> {t('manageSchedule')}</Link>
+            {statusByBarber[barber.barber_id] && (
+              <span role="status"> {statusByBarber[barber.barber_id]}</span>
+            )}
             <input
               placeholder={t('pinPlaceholder')}
-              value={pinInputs[barber.id] ?? ''}
-              onChange={(e) => setPinInputs((p) => ({ ...p, [barber.id]: e.target.value }))}
+              value={pinInputs[barber.barber_id] ?? ''}
+              onChange={(e) => setPinInputs((p) => ({ ...p, [barber.barber_id]: e.target.value }))}
               maxLength={6}
             />
             <button type="button" onClick={() => handleSetPin(barber)}>

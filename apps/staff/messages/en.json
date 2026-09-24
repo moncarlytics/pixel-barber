@@ -108,7 +108,12 @@
     "pinPlaceholder": "4-6 digit PIN",
     "setPinButton": "Set/Rotate PIN",
     "pinSetSuccess": "PIN updated",
-    "pinSetFailed": "Failed to update PIN"
+    "pinSetFailed": "Failed to update PIN",
+    "homeBranchLabel": "Home branch: {branch}",
+    "statusLabel": "Status: {status}",
+    "manageSchedule": "Schedule & skills",
+    "noBarbers": "No barbers at your branches yet.",
+    "loadFailed": "Couldn't load barbers."
   },
   "TodaysQueue": {
     "title": "Today's Queue",
