@@ -66,6 +66,18 @@ beforeAll(async () => {
     .single();
   branchId = branch!.id;
 
+  // branch_status_view treats a branch with no opening hours as closed, and tickets-join now
+  // refuses customer joins to a closed branch -- open this test branch all day, every day.
+  await admin.from('branch_hours').insert(
+    [0, 1, 2, 3, 4, 5, 6].map((day_of_week) => ({
+      branch_id: branchId,
+      day_of_week,
+      opens_at: '00:00:00',
+      closes_at: '23:59:59',
+      is_closed: false,
+    })),
+  );
+
   const { data: bs } = await admin
     .from('branch_services')
     .insert({ branch_id: branchId, service_id: serviceId })
