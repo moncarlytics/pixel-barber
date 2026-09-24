@@ -140,7 +140,18 @@
     "day3": "Wednesday",
     "day4": "Thursday",
     "day5": "Friday",
-    "day6": "Saturday"
+    "day6": "Saturday",
+    "upcomingTitle": "Next 4 weeks",
+    "dayOff": "Day off",
+    "notWorking": "Not working",
+    "changedByHand": "Changed by hand",
+    "otherBranch": "Another branch",
+    "editDay": "Change hours",
+    "saveDay": "Save day",
+    "cancel": "Cancel",
+    "markDayOff": "Mark day off",
+    "resetDay": "Reset to regular week",
+    "dayOffTicketsWarning": "This barber has {count} customer(s) in their queue today. Marking today off won't move them to another barber. Continue?"
   },
   "TodaysQueue": {
     "title": "Today's Queue",

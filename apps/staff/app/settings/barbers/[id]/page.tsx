@@ -12,6 +12,7 @@ import type { Database } from '@pixel-barber/shared';
 import { loadManageableBranches, type ManageableBranch } from '../scope';
 import RegularWeek from './RegularWeek';
 import SkillsEditor from './SkillsEditor';
+import UpcomingDays from './UpcomingDays';
 
 type ManageableBarber =
   Database['public']['Functions']['list_manageable_barbers']['Returns'][number];
@@ -72,9 +73,6 @@ export default function BarberDetailPage() {
     );
   }
 
-  // refreshKey is consumed by UpcomingDays in Task 5; referenced here so lint doesn't flag it.
-  void refreshKey;
-
   return (
     <main>
       <Link href="/settings/barbers">{t('backToList')}</Link>
@@ -85,6 +83,12 @@ export default function BarberDetailPage() {
         homeBranchId={barber.home_branch_id}
         branches={branches}
         onSaved={() => setRefreshKey((k) => k + 1)}
+      />
+      <UpcomingDays
+        barberId={barber.barber_id}
+        homeBranchId={barber.home_branch_id}
+        branches={branches}
+        refreshKey={refreshKey}
       />
       <SkillsEditor barberId={barber.barber_id} homeBranchId={barber.home_branch_id} />
     </main>
