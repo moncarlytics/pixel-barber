@@ -132,7 +132,9 @@ export default function BookFlow() {
       setError(
         body.error === 'NO_BARBER_AVAILABLE'
           ? t('noBarberAvailable')
-          : (body.error ?? t('joinFailed')),
+          : body.error === 'BRANCH_CLOSED'
+            ? t('branchClosed')
+            : (body.error ?? t('joinFailed')),
       );
       return;
     }

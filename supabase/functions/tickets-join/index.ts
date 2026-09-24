@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
       acceptFallback: accept_fallback === true,
       createdBy: 'customer',
       createdByStaffId: null,
+      enforceOpenHours: true,
     });
     return new Response(JSON.stringify({ ticket, wasExisting }), {
       status: 200,
@@ -73,6 +74,12 @@ Deno.serve(async (req) => {
     const message = (err as Error).message;
     if (message === 'NO_BARBER_AVAILABLE') {
       return new Response(JSON.stringify({ error: 'NO_BARBER_AVAILABLE' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (message === 'BRANCH_CLOSED') {
+      return new Response(JSON.stringify({ error: 'BRANCH_CLOSED' }), {
         status: 409,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

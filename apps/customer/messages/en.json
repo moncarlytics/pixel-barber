@@ -104,7 +104,8 @@
     "preferredBusyMessage": "This barber isn't available right now.",
     "waitForPreferred": "Wait for this barber",
     "takeNextAvailable": "Take next available",
-    "noBarberAvailable": "No barbers available for this service right now."
+    "noBarberAvailable": "No barbers available for this service right now.",
+    "branchClosed": "This branch is closed right now."
   },
   "TicketTracking": {
     "positionLabel": "Position in queue: {position}",

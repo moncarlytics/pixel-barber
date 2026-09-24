@@ -14,6 +14,7 @@ export interface CreateTicketParams {
   acceptFallback: boolean;
   createdBy: 'customer' | 'staff';
   createdByStaffId: string | null;
+  enforceOpenHours: boolean;
 }
 
 export async function createTicketAtomic(params: CreateTicketParams) {
@@ -26,6 +27,7 @@ export async function createTicketAtomic(params: CreateTicketParams) {
     acceptFallback,
     createdBy,
     createdByStaffId,
+    enforceOpenHours,
   } = params;
 
   // Idempotency (PRD 34): one_active_ticket_per_customer_branch is the real guard. Check for an
@@ -41,6 +43,23 @@ export async function createTicketAtomic(params: CreateTicketParams) {
     .maybeSingle();
   if (existing) {
     return { ticket: existing, wasExisting: true };
+  }
+
+  // Customers must not be able to self-service join a closed branch (staff walk-ins are exempt --
+  // they're physically in the shop and can judge for themselves). Checked AFTER the idempotency
+  // return above, so a customer with an existing active ticket still gets it back even after
+  // closing time, and BEFORE find_eligible_barber, so a closed branch never burns eligibility work
+  // or a visible ticket number.
+  if (enforceOpenHours) {
+    const { data: statusRow, error: statusError } = await admin
+      .from('branch_status_view')
+      .select('status')
+      .eq('branch_id', branchId)
+      .single();
+    if (statusError) throw statusError;
+    if (statusRow.status === 'closed' || statusRow.status === 'temporarily_closed') {
+      throw new Error('BRANCH_CLOSED');
+    }
   }
 
   // Resolve who this ticket is actually going to, re-deriving fresh rather than trusting any

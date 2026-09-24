@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
       acceptFallback: accept_fallback === true,
       createdBy: 'staff',
       createdByStaffId: staffRow.id,
+      enforceOpenHours: false,
     });
     return new Response(JSON.stringify({ ticket, wasExisting }), {
       status: 200,
