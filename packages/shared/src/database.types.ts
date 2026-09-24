@@ -1469,6 +1469,10 @@ export type Database = {
       auth_role: { Args: never; Returns: string };
       auth_staff_id: { Args: never; Returns: string };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };
+      fill_barber_schedule: {
+        Args: { p_barber_id?: string | null };
+        Returns: undefined;
+      };
       find_eligible_barber: {
         Args: {
           p_branch_id: string;
@@ -1527,6 +1531,10 @@ export type Database = {
       next_ticket_number: { Args: { p_branch_id: string }; Returns: string };
       recalculate_positions: {
         Args: { p_barber_id: string; p_branch_id: string };
+        Returns: undefined;
+      };
+      reset_barber_schedule_day: {
+        Args: { p_barber_id: string; p_date: string };
         Returns: undefined;
       };
     };
