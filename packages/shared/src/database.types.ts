@@ -159,6 +159,12 @@ export type Database = {
           },
         ];
       };
+      barber_days_off: {
+        Row: { barber_id: string; off_date: string };
+        Insert: { barber_id: string; off_date: string };
+        Update: { barber_id?: string; off_date?: string };
+        Relationships: [];
+      };
       barber_schedule: {
         Row: {
           barber_id: string;
@@ -166,6 +172,7 @@ export type Database = {
           break_end: string | null;
           break_start: string | null;
           id: string;
+          is_manual: boolean;
           shift_end: string;
           shift_start: string;
           work_date: string;
@@ -176,6 +183,7 @@ export type Database = {
           break_end?: string | null;
           break_start?: string | null;
           id?: string;
+          is_manual?: boolean;
           shift_end: string;
           shift_start: string;
           work_date: string;
@@ -186,6 +194,7 @@ export type Database = {
           break_end?: string | null;
           break_start?: string | null;
           id?: string;
+          is_manual?: boolean;
           shift_end?: string;
           shift_start?: string;
           work_date?: string;
@@ -282,6 +291,33 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      barber_weekly_hours: {
+        Row: {
+          barber_id: string;
+          branch_id: string;
+          day_of_week: number;
+          id: string;
+          shift_end: string;
+          shift_start: string;
+        };
+        Insert: {
+          barber_id: string;
+          branch_id: string;
+          day_of_week: number;
+          id?: string;
+          shift_end: string;
+          shift_start: string;
+        };
+        Update: {
+          barber_id?: string;
+          branch_id?: string;
+          day_of_week?: number;
+          id?: string;
+          shift_end?: string;
+          shift_start?: string;
+        };
+        Relationships: [];
       };
       barbers: {
         Row: {
@@ -1476,6 +1512,17 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      list_manageable_barbers: {
+        Args: never;
+        Returns: {
+          barber_id: string;
+          staff_user_id: string;
+          name: string;
+          status: Database['public']['Enums']['barber_status'];
+          home_branch_id: string;
+          home_branch_name: string;
+        }[];
       };
       next_ticket_number: { Args: { p_branch_id: string }; Returns: string };
       recalculate_positions: {
