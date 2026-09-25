@@ -4,7 +4,9 @@
 // never by the apps. Claims pending SMS notifications, decides each (stale / expired / opted out /
 // no phone / live sending off), texts the rest through Arkesel, and records sent or failed.
 // Texts go out ONLY when SMS_NOTIFICATIONS_LIVE=true -- this project is shared with automated tests
-// whose made-up Ghana numbers may belong to real people.
+// whose made-up Ghana numbers may belong to real people. Auth accepts both exact key match and
+// gateway-verified JWT service_role claims (the platform gateway verifies JWT signatures with
+// verify_jwt = true; never disable it or role claims become forgeable).
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 import { json } from '../_shared/http.ts';
@@ -19,12 +21,40 @@ import {
   type ClaimedNotification,
 } from '../_shared/notification-sms-core.ts';
 
+function isServiceRoleCaller(authHeader: string | null, envKey: string): boolean {
+  if (!authHeader) return false;
+
+  // Exact match with env key (legacy .env.local behavior)
+  if (authHeader === `Bearer ${envKey}`) return true;
+
+  // JWT check: extract bearer token and verify role claim
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/);
+  if (!bearerMatch) return false;
+
+  const token = bearerMatch[1];
+  const parts = token.split('.');
+  if (parts.length !== 3) return false; // Invalid JWT structure
+
+  try {
+    // Decode payload: convert base64url to base64, then decode
+    let payload = parts[1];
+    payload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    // Pad with = if needed
+    while (payload.length % 4) payload += '=';
+    const decoded = atob(payload);
+    const claim = JSON.parse(decoded);
+    return claim.role === 'service_role';
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  if (req.headers.get('Authorization') !== `Bearer ${serviceRoleKey}`) {
+  if (!isServiceRoleCaller(req.headers.get('Authorization'), serviceRoleKey)) {
     return json(401, { error: 'Unauthorized' });
   }
 
