@@ -31,11 +31,15 @@ Deno.serve(async (req) => {
   );
   const tokenHash = await hashInviteToken(token);
 
-  const { data: invite } = await admin
+  const { data: invite, error: lookupError } = await admin
     .from('staff_users')
     .select('id, auth_user_id, name, role, email, phone_e164, invite_status, invite_expires_at')
     .eq('invite_token_hash', tokenHash)
     .maybeSingle();
+  if (lookupError) {
+    console.error('staff-invite-accept: invite lookup failed', lookupError);
+    return json(500, { error: 'Could not check the invite' });
+  }
   const isValid =
     !!invite &&
     invite.invite_status === 'pending' &&
@@ -106,7 +110,7 @@ Deno.serve(async (req) => {
       'staff-invite-accept: setting the password failed, reverting the claim',
       passwordError,
     );
-    await admin
+    const { error: revertError } = await admin
       .from('staff_users')
       .update({
         invite_status: 'pending',
@@ -115,6 +119,13 @@ Deno.serve(async (req) => {
         invite_expires_at: invite.invite_expires_at,
       })
       .eq('id', invite.id);
+    if (revertError) {
+      console.error('staff-invite-accept: REVERT FAILED', {
+        staffUserId: invite.id,
+        authUserId: invite.auth_user_id,
+        revertError,
+      });
+    }
     return json(500, { error: 'Could not accept the invite' });
   }
 
