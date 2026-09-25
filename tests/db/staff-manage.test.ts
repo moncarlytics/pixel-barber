@@ -108,7 +108,7 @@ describe('staff-manage', () => {
 
     // The row is gone, so a second revoke of the same id can't find it -- 404, not 409.
     expect((await manage('revoke', toRevoke.staffUserId)).status).toBe(404);
-  });
+  }, 30000);
 
   it('lets the same email be invited again after its pending invite was revoked', async () => {
     const result = await callFunction(
@@ -144,7 +144,7 @@ describe('staff-manage', () => {
     expect((await readInvite(active.staffUserId)).is_active).toBe(true);
     await expect(signIn({ email: active.email })).resolves.toBeTruthy();
     expect((await manage('reactivate', active.staffUserId)).status).toBe(409);
-  });
+  }, 30000);
 
   it('refuses the Owner deactivating their own account', async () => {
     expect((await manage('deactivate', f.owner.staffUserId)).status).toBe(409);

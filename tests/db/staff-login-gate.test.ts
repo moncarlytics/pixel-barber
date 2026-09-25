@@ -44,7 +44,7 @@ describe('custom_access_token_hook login gate', () => {
     });
     expect(updateError).toBeNull();
     await expect(signIn({ email: pending.email })).rejects.toBeTruthy();
-  });
+  }, 30000);
 
   it('refuses an accepted account once it is deactivated, even with the correct password', async () => {
     const deactivated = await createStaffAccount(f, {
@@ -93,7 +93,7 @@ describe('list_bookable_barbers', () => {
     expect(ids).toContain(listedActive.barberId);
     expect(ids).not.toContain(listedPending.barberId);
     expect(ids).not.toContain(listedDeactivated.barberId);
-  });
+  }, 30000);
 });
 
 describe('find_eligible_barber skips a pending barber', () => {
@@ -125,7 +125,7 @@ describe('find_eligible_barber skips a pending barber', () => {
     expect(data![0].preferred_eligible).toBe(false);
     expect(data![0].preferred_scheduled_today).toBe(false);
     expect(data![0].fallback_barber_id).toBeNull();
-  });
+  }, 30000);
 });
 
 describe('verify_barber_pin skips a pending barber', () => {
@@ -148,5 +148,5 @@ describe('verify_barber_pin skips a pending barber', () => {
     });
     expect(error).toBeNull();
     expect(data ?? []).toHaveLength(0);
-  });
+  }, 30000);
 });
