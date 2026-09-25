@@ -114,8 +114,22 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error('staff-invite: insert failed, rolling back', err);
     // barbers and staff_branch_assignments cascade from staff_users.
-    if (staffUserId) await admin.from('staff_users').delete().eq('id', staffUserId);
-    await admin.auth.admin.deleteUser(authUserId);
+    let staffDeleteError: unknown;
+    let authDeleteError: unknown;
+    if (staffUserId) {
+      const result = await admin.from('staff_users').delete().eq('id', staffUserId);
+      staffDeleteError = result.error;
+    }
+    const authResult = await admin.auth.admin.deleteUser(authUserId);
+    authDeleteError = authResult.error;
+    if (staffDeleteError || authDeleteError) {
+      console.error('staff-invite: ROLLBACK FAILED', {
+        staffUserId,
+        authUserId,
+        staffDeleteError,
+        authDeleteError,
+      });
+    }
     return json(500, { error: 'Could not create the invite' });
   }
 
