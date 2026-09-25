@@ -1377,7 +1377,9 @@ export type Database = {
           email: string | null;
           id: string;
           invite_accepted_at: string | null;
+          invite_expires_at: string | null;
           invite_status: Database['public']['Enums']['staff_invite_status'];
+          invite_token_hash: string | null;
           invited_at: string | null;
           invited_by_staff_id: string | null;
           is_active: boolean;
@@ -1393,7 +1395,9 @@ export type Database = {
           email?: string | null;
           id?: string;
           invite_accepted_at?: string | null;
+          invite_expires_at?: string | null;
           invite_status?: Database['public']['Enums']['staff_invite_status'];
+          invite_token_hash?: string | null;
           invited_at?: string | null;
           invited_by_staff_id?: string | null;
           is_active?: boolean;
@@ -1409,7 +1413,9 @@ export type Database = {
           email?: string | null;
           id?: string;
           invite_accepted_at?: string | null;
+          invite_expires_at?: string | null;
           invite_status?: Database['public']['Enums']['staff_invite_status'];
+          invite_token_hash?: string | null;
           invited_at?: string | null;
           invited_by_staff_id?: string | null;
           is_active?: boolean;
@@ -1526,6 +1532,21 @@ export type Database = {
           status: Database['public']['Enums']['barber_status'];
           home_branch_id: string;
           home_branch_name: string;
+        }[];
+      };
+      list_staff_accounts: {
+        Args: never;
+        Returns: {
+          staff_user_id: string;
+          name: string;
+          role: Database['public']['Enums']['staff_role'];
+          email: string | null;
+          phone_e164: string | null;
+          branch_id: string | null;
+          branch_name: string | null;
+          status: string;
+          invited_at: string | null;
+          is_self: boolean;
         }[];
       };
       next_ticket_number: { Args: { p_branch_id: string }; Returns: string };
