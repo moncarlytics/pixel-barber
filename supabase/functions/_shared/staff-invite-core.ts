@@ -238,6 +238,8 @@ export async function sendInvite(
       fetchImpl,
     );
     if (smsResult === 'sent') return { delivered: true };
+    // 'unknown_outcome' (a timeout) collapses into 'provider_error' here: invites have never
+    // distinguished the two, and this keeps sendInvite's behaviour unchanged.
     return {
       delivered: false,
       reason: smsResult === 'not_configured' ? 'sms_not_configured' : 'provider_error',

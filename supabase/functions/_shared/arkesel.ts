@@ -22,13 +22,17 @@ export function isArkeselSuccess(httpOk: boolean, rawBody: string): boolean {
   }
 }
 
-/** Sends one SMS. Never throws. */
+/** Sends one SMS. Never throws.
+ * A timeout means the request never got a response -- Arkesel may or may not have already sent the
+ * text -- so it is reported separately as 'unknown_outcome' rather than 'provider_error': callers
+ * that retry on 'provider_error' must NOT retry an 'unknown_outcome', or a message that already went
+ * out could be sent again. */
 export async function sendArkeselSms(
   phone: string,
   message: string,
   config: ArkeselConfig,
   fetchImpl: typeof fetch = fetch,
-): Promise<'sent' | 'not_configured' | 'provider_error'> {
+): Promise<'sent' | 'not_configured' | 'provider_error' | 'unknown_outcome'> {
   if (!config.apiKey || !config.senderId) return 'not_configured';
   try {
     const response = await fetchImpl('https://sms.arkesel.com/api/v2/sms/send', {
@@ -39,7 +43,10 @@ export async function sendArkeselSms(
     });
     const rawBody = await response.text();
     return isArkeselSuccess(response.ok, rawBody) ? 'sent' : 'provider_error';
-  } catch {
+  } catch (err) {
+    // DOMException (the timeout/abort signal) does not extend Error, so name is read structurally.
+    const name = (err as { name?: unknown } | null)?.name;
+    if (name === 'TimeoutError' || name === 'AbortError') return 'unknown_outcome';
     return 'provider_error';
   }
 }

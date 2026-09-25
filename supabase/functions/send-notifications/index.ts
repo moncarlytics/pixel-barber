@@ -12,10 +12,13 @@ import { json } from '../_shared/http.ts';
 import { sendArkeselSms } from '../_shared/arkesel.ts';
 import {
   DISPATCH_BATCH_SIZE,
+  RUN_DEADLINE_MS,
   SMS_NOTIFICATION_TYPES,
   afterProviderError,
   buildYoureNextSms,
   decideNotification,
+  isUsableCustomerAppUrl,
+  parseAllowlist,
   ticketLink,
   type ClaimedNotification,
 } from '../_shared/notification-sms-core.ts';
@@ -37,6 +40,7 @@ async function isServiceRoleCaller(authHeader: string | null): Promise<boolean> 
 }
 
 Deno.serve(async (req) => {
+  const startedAt = Date.now();
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
@@ -49,6 +53,7 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, serviceRoleKey);
   const live = Deno.env.get('SMS_NOTIFICATIONS_LIVE') === 'true';
   const customerAppUrl = Deno.env.get('CUSTOMER_APP_URL') ?? '';
+  const allowlist = parseAllowlist(Deno.env.get('SMS_NOTIFICATIONS_ALLOWLIST') ?? undefined);
   const arkesel = {
     apiKey: Deno.env.get('ARKESEL_API_KEY') ?? undefined,
     senderId: Deno.env.get('ARKESEL_SENDER_ID') ?? undefined,
@@ -68,6 +73,7 @@ Deno.serve(async (req) => {
     sent: 0,
     retried: 0,
     failed: 0,
+    deferred: 0,
     skipped: {} as Record<string, number>,
   };
 
@@ -80,14 +86,33 @@ Deno.serve(async (req) => {
       console.error('send-notifications: could not record failure', { id, reason, updateError });
   };
 
+  const release = async (id: string) => {
+    const { error: releaseError } = await admin
+      .from('notifications')
+      .update({ dispatch_claimed_at: null })
+      .eq('id', id);
+    if (releaseError)
+      console.error('send-notifications: could not release claim', { id, releaseError });
+  };
+
   for (const n of rows) {
-    const decision = decideNotification(n, new Date(), live);
+    // Past the per-run deadline, stop sending and give this row (and every row after it) back to the
+    // queue rather than hold a stale claim until the next run's reclaim window passes.
+    if (Date.now() - startedAt > RUN_DEADLINE_MS) {
+      await release(n.notification_id);
+      summary.deferred++;
+      continue;
+    }
+
+    const decision = decideNotification(n, new Date(), live, allowlist);
     if (decision.action === 'skip') {
       await fail(n.notification_id, decision.reason);
       summary.skipped[decision.reason] = (summary.skipped[decision.reason] ?? 0) + 1;
       continue;
     }
-    if (!customerAppUrl) {
+    // decision.action === 'send' only when live sending is on (decideNotification), so this is the
+    // live-only "no localhost link" guard as well as the plain missing-URL guard.
+    if (!customerAppUrl || (live && !isUsableCustomerAppUrl(customerAppUrl))) {
       await fail(n.notification_id, 'not_configured');
       summary.failed++;
       continue;
@@ -119,20 +144,19 @@ Deno.serve(async (req) => {
     } else if (result === 'not_configured') {
       await fail(n.notification_id, 'not_configured');
       summary.failed++;
+    } else if (result === 'unknown_outcome') {
+      // The request timed out: Arkesel may already have sent this text, so it is never retried.
+      console.error('send-notifications: unknown outcome (timeout), not retrying', {
+        id: n.notification_id,
+      });
+      await fail(n.notification_id, 'unknown_outcome');
+      summary.failed++;
     } else if (afterProviderError(n.dispatch_attempts) === 'retry') {
       console.error('send-notifications: provider error, will retry', {
         id: n.notification_id,
         attempts: n.dispatch_attempts,
       });
-      const { error: releaseError } = await admin
-        .from('notifications')
-        .update({ dispatch_claimed_at: null })
-        .eq('id', n.notification_id);
-      if (releaseError)
-        console.error('send-notifications: could not release claim', {
-          id: n.notification_id,
-          releaseError,
-        });
+      await release(n.notification_id);
       summary.retried++;
     } else {
       console.error('send-notifications: provider error, giving up', { id: n.notification_id });

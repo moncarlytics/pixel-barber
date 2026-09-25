@@ -27,6 +27,9 @@ Functions (Deno, `@supabase/supabase-js`), Arkesel SMS API, Vitest (`tests/db/`,
    (its unit tests prove it); `staff-invite` and `staff-manage` are redeployed with the new import.
 3. **The claim test uses a unique, made-up notification type** so the live 30-second cron job (which
    only claims `youre_next`) can never race it.
+4. **Final-review hardening.** See the spec's "Amendments (implementation)" section for the
+   DB-verified caller check, the 10-minute reclaim window, the allowlist, `unknown_outcome`, the
+   `almost_turn`-only sendable rule, the localhost-when-live guard, and the per-run deadline.
 
 ## Global Constraints
 

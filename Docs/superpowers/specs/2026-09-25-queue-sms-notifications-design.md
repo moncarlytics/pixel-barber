@@ -134,3 +134,53 @@ This is a first subset of PRD §20. Not included (follow-ups):
   next" is the position-based stand-in for now.
 - Arkesel delivery receipts (`delivered` status).
 - Staff notifications.
+- Pooled tickets and tickets that join straight into `called` never get a "you're next" text (only a
+  ticket that passes through `almost_turn` does).
+- Messages near 160 characters may split into two SMS parts at the carrier level; this slice does not
+  measure or truncate message length.
+
+## Amendments (implementation)
+
+Found or ruled on while implementing and hardening this slice; the decisions above are otherwise
+unchanged.
+
+- **The DB-verified caller check.** `send-notifications` accepts a caller either by an exact match on
+  `SUPABASE_SERVICE_ROLE_KEY`, or — for a gateway that verifies and forwards a service-role JWT without
+  it being byte-identical to the configured key — by creating a client with the caller's own
+  `Authorization` header and calling `claim_sms_notifications(p_types := '{}', p_limit := 0)`: only
+  `service_role` may execute that function, so a non-error result proves the caller is service-role
+  without ever claiming a real row (`p_limit := 0`). Anything else is 401.
+- **Reclaim window: 10 minutes**, not 5. It now equals `MAX_NOTIFICATION_AGE_MINUTES`, so a row
+  reclaimed from a crashed run is always already past its expiry (`decideNotification` returns
+  `'expired'`) by the time the reclaiming run decides it — a slow-but-alive run and a reclaim can never
+  both text the same customer.
+- **Allowlist.** `SMS_NOTIFICATIONS_ALLOWLIST` (comma-separated E.164 numbers, parsed by
+  `parseAllowlist`) restricts live sending to a known set of numbers. Checked after `no_phone` and
+  before the live-sending check; a number not on a non-empty allowlist records `'not_allowlisted'`. No
+  allowlist (unset or empty) changes nothing.
+- **`unknown_outcome`.** A timed-out Arkesel call (`TimeoutError`/`AbortError`) is reported separately
+  from `provider_error`, because the request may already have reached Arkesel and sent the text.
+  `send-notifications` records it as `failed: unknown_outcome` and never retries it. Invites
+  (`staff-invite-core.ts`'s `sendInvite`) still map it into `provider_error` — no behaviour change
+  there.
+- **Only `almost_turn` is sendable.** A claimed row whose ticket is back in `waiting` (e.g. it dropped
+  back after a skip, then became next again under a fresh row) is `'stale'`, not sendable — the moment
+  the notification was recorded for has passed.
+- **No localhost links when live.** With `SMS_NOTIFICATIONS_LIVE=true`, a `CUSTOMER_APP_URL` that is
+  empty or whose hostname is `localhost`/`127.0.0.1` (`isUsableCustomerAppUrl`) records
+  `'not_configured'` instead of texting a link nobody outside the dev machine could open.
+- **Per-run deadline.** Each run tracks its own elapsed time; once it exceeds `RUN_DEADLINE_MS`
+  (60 seconds), every remaining claimed row is released (`dispatch_claimed_at = null`) unprocessed and
+  counted as `deferred`, rather than risk holding claims past the reclaim window.
+
+## Go-live checklist
+
+Before setting `SMS_NOTIFICATIONS_LIVE=true` anywhere:
+
+1. Run live texting only on a production Supabase project that tests never touch — this project is
+   shared with automated tests that create customers with made-up Ghana numbers.
+2. Set a real `CUSTOMER_APP_URL` (not `localhost`/`127.0.0.1` — live sends now refuse those).
+3. Do the first live test with `SMS_NOTIFICATIONS_ALLOWLIST` set to your own number only.
+4. Remove the allowlist only on production, once satisfied the text and link are correct.
+5. Watch `net._http_response` (via `select status_code from net._http_response order by created desc
+   limit 10;`) for the cron job's HTTP status codes after enabling.

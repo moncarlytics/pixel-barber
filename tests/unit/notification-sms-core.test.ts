@@ -7,6 +7,8 @@ import {
   afterProviderError,
   buildYoureNextSms,
   decideNotification,
+  isUsableCustomerAppUrl,
+  parseAllowlist,
   ticketLink,
   type ClaimedNotification,
 } from '../../supabase/functions/_shared/notification-sms-core';
@@ -38,6 +40,7 @@ describe('decideNotification', () => {
   it.each([
     ['stale when the ticket was already called', row({ ticket_state: 'called' }), 'stale'],
     ['stale when the ticket is gone', row({ ticket_state: null, ticket_id: null }), 'stale'],
+    ['stale when the ticket dropped back to waiting', row({ ticket_state: 'waiting' }), 'stale'],
     ['expired when older than 10 minutes', row({ created_at: '2026-09-25T11:49:59Z' }), 'expired'],
     ['opted_out when SMS is switched off', row({ sms_backup_enabled: false }), 'opted_out'],
     ['no_phone when there is no number', row({ phone_e164: null }), 'no_phone'],
@@ -75,10 +78,80 @@ describe('decideNotification', () => {
     });
   });
 
-  it("treats 'waiting' as still sendable", () => {
+  it('only treats almost_turn as sendable, not waiting', () => {
     expect(decideNotification(row({ ticket_state: 'waiting' }), NOW, true)).toEqual({
+      action: 'skip',
+      reason: 'stale',
+    });
+    expect(decideNotification(row({ ticket_state: 'almost_turn' }), NOW, true)).toEqual({
       action: 'send',
     });
+  });
+});
+
+describe('decideNotification allowlist', () => {
+  it('sends when there is no allowlist', () => {
+    expect(decideNotification(row(), NOW, true, null)).toEqual({ action: 'send' });
+    expect(decideNotification(row(), NOW, true, new Set())).toEqual({ action: 'send' });
+  });
+
+  it('skips not_allowlisted when the phone number is not in a non-empty allowlist', () => {
+    expect(decideNotification(row(), NOW, true, new Set(['+233200000000']))).toEqual({
+      action: 'skip',
+      reason: 'not_allowlisted',
+    });
+  });
+
+  it('sends when the phone number is in the allowlist', () => {
+    expect(decideNotification(row(), NOW, true, new Set(['+233244123456']))).toEqual({
+      action: 'send',
+    });
+  });
+
+  it('checks no_phone before not_allowlisted before sms_disabled', () => {
+    const allowlist = new Set(['+233200000000']);
+    expect(decideNotification(row({ phone_e164: null }), NOW, true, allowlist)).toEqual({
+      action: 'skip',
+      reason: 'no_phone',
+    });
+    expect(decideNotification(row(), NOW, false, allowlist)).toEqual({
+      action: 'skip',
+      reason: 'not_allowlisted',
+    });
+    expect(decideNotification(row(), NOW, false, null)).toEqual({
+      action: 'skip',
+      reason: 'sms_disabled',
+    });
+  });
+});
+
+describe('parseAllowlist', () => {
+  it('returns null when unset or blank', () => {
+    expect(parseAllowlist(undefined)).toBeNull();
+    expect(parseAllowlist('')).toBeNull();
+    expect(parseAllowlist(' , , ')).toBeNull();
+  });
+
+  it('splits on commas, trims, and drops empties', () => {
+    expect(parseAllowlist('+233244123456, +233200000000 ,,')).toEqual(
+      new Set(['+233244123456', '+233200000000']),
+    );
+  });
+});
+
+describe('isUsableCustomerAppUrl', () => {
+  it('rejects empty, localhost and 127.0.0.1', () => {
+    expect(isUsableCustomerAppUrl('')).toBe(false);
+    expect(isUsableCustomerAppUrl('http://localhost:3000')).toBe(false);
+    expect(isUsableCustomerAppUrl('http://127.0.0.1:3000')).toBe(false);
+  });
+
+  it('rejects an unparseable URL', () => {
+    expect(isUsableCustomerAppUrl('not a url')).toBe(false);
+  });
+
+  it('accepts a real origin', () => {
+    expect(isUsableCustomerAppUrl('https://app.pixelbarber.example')).toBe(true);
   });
 });
 
@@ -148,5 +221,17 @@ describe('sendArkeselSms', () => {
       throw new Error('network');
     });
     expect(await sendArkeselSms('+233244123456', 'x', config, throwing)).toBe('provider_error');
+  });
+
+  it('reports unknown_outcome when the request times out, since Arkesel may already have sent it', async () => {
+    const timingOut = vi.fn(async () => {
+      throw new DOMException('timed out', 'TimeoutError');
+    });
+    expect(await sendArkeselSms('+233244123456', 'x', config, timingOut)).toBe('unknown_outcome');
+
+    const aborting = vi.fn(async () => {
+      throw new DOMException('aborted', 'AbortError');
+    });
+    expect(await sendArkeselSms('+233244123456', 'x', config, aborting)).toBe('unknown_outcome');
   });
 });
