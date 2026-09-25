@@ -1537,6 +1537,10 @@ export type Database = {
         Args: { p_barber_id: string; p_date: string };
         Returns: undefined;
       };
+      set_barber_weekly_hours: {
+        Args: { p_barber_id: string; p_days: Json };
+        Returns: undefined;
+      };
     };
     Enums: {
       appointment_status:

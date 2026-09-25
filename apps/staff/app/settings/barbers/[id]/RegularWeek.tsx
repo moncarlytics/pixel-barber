@@ -33,9 +33,45 @@ export default function RegularWeek({
   const t = useTranslations('BarberDetail');
   const supabase = createBrowserSupabaseClient();
   const [rows, setRows] = useState<DayRow[]>([]);
+  // The last-loaded (= last-saved) state. Save diffs against this and only sends what changed;
+  // a failed save reloads from the DB and resets both `rows` and `baseline` to it, so the form
+  // never shows unsaved edits as if they'd been saved.
+  const [baseline, setBaseline] = useState<DayRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  function toDayRows(
+    data: { day_of_week: number; branch_id: string; shift_start: string; shift_end: string }[],
+  ) {
+    const byDay = new Map(data.map((r) => [r.day_of_week, r]));
+    return DAY_ORDER.map((dayOfWeek) => {
+      const r = byDay.get(dayOfWeek);
+      return r
+        ? {
+            dayOfWeek,
+            working: true,
+            branchId: r.branch_id,
+            start: r.shift_start.slice(0, 5),
+            end: r.shift_end.slice(0, 5),
+          }
+        : { dayOfWeek, working: false, branchId: homeBranchId, start: '09:00', end: '18:00' };
+    });
+  }
+
+  async function load() {
+    const { data, error: loadError } = await supabase
+      .from('barber_weekly_hours')
+      .select('*')
+      .eq('barber_id', barberId);
+    if (loadError) {
+      setError(t('loadFailed'));
+      return;
+    }
+    const loaded = toDayRows(data ?? []);
+    setRows(loaded);
+    setBaseline(loaded);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -49,21 +85,9 @@ export default function RegularWeek({
           setError(t('loadFailed'));
           return;
         }
-        const byDay = new Map((data ?? []).map((r) => [r.day_of_week, r]));
-        setRows(
-          DAY_ORDER.map((dayOfWeek) => {
-            const r = byDay.get(dayOfWeek);
-            return r
-              ? {
-                  dayOfWeek,
-                  working: true,
-                  branchId: r.branch_id,
-                  start: r.shift_start.slice(0, 5),
-                  end: r.shift_end.slice(0, 5),
-                }
-              : { dayOfWeek, working: false, branchId: homeBranchId, start: '09:00', end: '18:00' };
-          }),
-        );
+        const loaded = toDayRows(data ?? []);
+        setRows(loaded);
+        setBaseline(loaded);
       });
     return () => {
       cancelled = true;
@@ -85,38 +109,34 @@ export default function RegularWeek({
       setError(t('endBeforeStart'));
       return;
     }
+    const baselineByDay = new Map(baseline.map((r) => [r.dayOfWeek, r]));
+    const changed = rows.filter((r) => {
+      const b = baselineByDay.get(r.dayOfWeek);
+      if (!b || r.working !== b.working) return true;
+      return r.working && (r.branchId !== b.branchId || r.start !== b.start || r.end !== b.end);
+    });
+    if (changed.length === 0) {
+      setSaved(true);
+      return;
+    }
     setSaving(true);
-    const offDays = rows.filter((r) => !r.working).map((r) => r.dayOfWeek);
-    if (offDays.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('barber_weekly_hours')
-        .delete()
-        .eq('barber_id', barberId)
-        .in('day_of_week', offDays);
-      if (deleteError) {
-        setError(t('saveFailed'));
-        setSaving(false);
-        return;
-      }
-    }
-    if (working.length > 0) {
-      const { error: upsertError } = await supabase.from('barber_weekly_hours').upsert(
-        working.map((r) => ({
-          barber_id: barberId,
-          day_of_week: r.dayOfWeek,
-          branch_id: r.branchId,
-          shift_start: r.start,
-          shift_end: r.end,
-        })),
-        { onConflict: 'barber_id,day_of_week' },
-      );
-      if (upsertError) {
-        setError(t('saveFailed'));
-        setSaving(false);
-        return;
-      }
-    }
+    const { error: saveError } = await supabase.rpc('set_barber_weekly_hours', {
+      p_barber_id: barberId,
+      p_days: changed.map((r) => ({
+        day_of_week: r.dayOfWeek,
+        working: r.working,
+        branch_id: r.working ? r.branchId : null,
+        shift_start: r.working ? r.start : null,
+        shift_end: r.working ? r.end : null,
+      })),
+    });
     setSaving(false);
+    if (saveError) {
+      setError(t('saveFailed'));
+      await load();
+      return;
+    }
+    setBaseline(rows);
     setSaved(true);
     onSaved();
   }
@@ -155,6 +175,11 @@ export default function RegularWeek({
                   disabled={!r.working}
                   onChange={(e) => update(i, { branchId: e.target.value })}
                 >
+                  {!branches.some((b) => b.id === r.branchId) && (
+                    <option value={r.branchId} disabled>
+                      {t('otherBranch')}
+                    </option>
+                  )}
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
