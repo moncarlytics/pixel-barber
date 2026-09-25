@@ -43,7 +43,7 @@ export default function BranchDetailPage() {
         await Promise.all([
           supabase.from('branches').select('*').eq('id', params.id).single(),
           supabase.from('branch_hours').select('*').eq('branch_id', params.id),
-          supabase.from('barbers').select('*').eq('home_branch_id', params.id),
+          supabase.rpc('list_bookable_barbers', { p_branch_id: params.id }),
           supabase
             .from('branch_services')
             .select('id, service_id, services(name)')

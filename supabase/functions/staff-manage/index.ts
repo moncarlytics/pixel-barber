@@ -1,8 +1,10 @@
 // supabase/functions/staff-manage/index.ts
 // Owner-only (manage_staff) actions on an existing staff account (App Flow 8.12):
 //   resend     -- pending invite: new token + 7-day expiry (old link dies), send again
-//   revoke     -- pending invite: clear the token, mark revoked, ban the login
-//   deactivate -- accepted + active, never the caller's own account: is_active=false, ban
+//   revoke     -- pending, never-accepted invite: hard-delete the staff_users row (barbers/
+//                 staff_branch_assignments cascade) and the login, freeing the contact for reuse
+//   deactivate -- accepted + active, never the caller's own account: is_active=false, ban, and take
+//                 any barber row offline
 //   reactivate -- accepted + inactive: is_active=true, unban
 // A ban blocks sign-in and refresh; an already-issued access token lasts until it expires (~1h).
 import { corsHeaders } from '../_shared/cors.ts';
@@ -89,45 +91,28 @@ Deno.serve(async (req) => {
   if (action === 'revoke') {
     if (target.invite_status !== 'pending')
       return json(409, { error: 'Only a pending invite can be revoked' });
-    const { error: banError } = await setBan(BANNED);
-    if (banError) return json(500, { error: 'Could not revoke the invite' });
+    // Hard-delete rather than ban: the account never accepted, so nothing is lost by removing it,
+    // and doing so frees the phone/email for a future invite (or, if it was a mistyped stranger's
+    // number, lets that person sign up as a customer). barbers and staff_branch_assignments cascade
+    // from staff_users.
     const { data, error } = await admin
       .from('staff_users')
-      .update({ invite_status: 'revoked', invite_token_hash: null, invite_expires_at: null })
+      .delete()
       .eq('id', target.id)
       .eq('invite_status', 'pending')
       .select('id');
-    if (error) {
-      const { error: compensationError } = await setBan(UNBANNED);
-      if (compensationError) {
-        console.error('staff-manage: COMPENSATION FAILED', {
-          action: 'revoke',
-          staffUserId: target.id,
-          authUserId: target.auth_user_id,
-          error: compensationError,
-        });
-      }
-      return json(500, { error: 'Could not revoke the invite' });
-    }
-    if (!data || data.length === 0) {
-      const { data: reread } = await admin
-        .from('staff_users')
-        .select('invite_status, is_active')
-        .eq('id', target.id)
-        .maybeSingle();
-      if (reread?.invite_status === 'revoked') {
-        return json(409, { error: 'Only a pending invite can be revoked' });
-      }
-      const { error: compensationError } = await setBan(UNBANNED);
-      if (compensationError) {
-        console.error('staff-manage: COMPENSATION FAILED', {
-          action: 'revoke',
-          staffUserId: target.id,
-          authUserId: target.auth_user_id,
-          error: compensationError,
-        });
-      }
+    if (error) return json(500, { error: 'Could not revoke the invite' });
+    if (!data || data.length === 0)
       return json(409, { error: 'Only a pending invite can be revoked' });
+    const { error: authDeleteError } = await admin.auth.admin.deleteUser(target.auth_user_id);
+    if (authDeleteError) {
+      // The staff row is gone either way; the orphaned login has no staff claims and can't sign in
+      // as staff, so this is logged for cleanup but doesn't fail the request.
+      console.error('staff-manage: REVOKE AUTH DELETE FAILED', {
+        staffUserId: target.id,
+        authUserId: target.auth_user_id,
+        error: authDeleteError,
+      });
     }
     return json(200, { ok: true });
   }
@@ -178,6 +163,16 @@ Deno.serve(async (req) => {
         });
       }
       return json(409, { error: 'Only an active account can be deactivated' });
+    }
+    const { error: barberStatusError } = await admin
+      .from('barbers')
+      .update({ status: 'offline' })
+      .eq('staff_user_id', target.id);
+    if (barberStatusError) {
+      console.error('staff-manage: barber status reset failed', {
+        staffUserId: target.id,
+        error: barberStatusError,
+      });
     }
     return json(200, { ok: true });
   }

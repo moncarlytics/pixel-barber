@@ -28,7 +28,7 @@ export default function StaffLoginPage() {
       'email' in login ? { email: login.email, password } : { phone: login.phone, password },
     );
     if (signInError) {
-      setError(signInError.message);
+      setError(t('signInFailed'));
       return;
     }
     // Barbers land on Today's Queue, everyone else on /tickets (shared with Accept Invite).

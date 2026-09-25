@@ -55,10 +55,9 @@ export default function BookFlow() {
         })),
       );
 
-      const { data: barberRows } = await supabase
-        .from('barbers')
-        .select('*')
-        .eq('home_branch_id', branchId!);
+      const { data: barberRows } = await supabase.rpc('list_bookable_barbers', {
+        p_branch_id: branchId!,
+      });
       setBarbers(barberRows ?? []);
     }
     load();

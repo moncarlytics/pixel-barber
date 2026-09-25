@@ -45,13 +45,9 @@ export default function StaffTicketsPage() {
         .then(({ data }) => {
           if (!cancelled) setTickets(data ?? []);
         });
-      supabase
-        .from('barbers')
-        .select('*')
-        .eq('home_branch_id', selectedBranchId)
-        .then(({ data }) => {
-          if (!cancelled) setBarbers(data ?? []);
-        });
+      supabase.rpc('list_bookable_barbers', { p_branch_id: selectedBranchId }).then(({ data }) => {
+        if (!cancelled) setBarbers(data ?? []);
+      });
     }
 
     const channel = supabase

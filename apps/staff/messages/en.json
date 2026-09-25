@@ -9,6 +9,7 @@
     "title": "Staff Login",
     "identifierPlaceholder": "Email or phone",
     "invalidIdentifier": "Enter a valid email or Ghana phone number.",
+    "signInFailed": "Couldn't sign in. Check your details, or ask your Owner whether your account is active.",
     "passwordPlaceholder": "Password",
     "logIn": "Log In",
     "pinLoginLink": "Shared station? Log in with PIN"

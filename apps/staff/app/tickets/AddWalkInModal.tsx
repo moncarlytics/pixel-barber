@@ -46,10 +46,8 @@ export default function AddWalkInModal({
 
   useEffect(() => {
     supabase
-      .from('barbers')
-      .select('id')
-      .eq('home_branch_id', branchId)
-      .then(({ data }) => setBarbers(data ?? []));
+      .rpc('list_bookable_barbers', { p_branch_id: branchId })
+      .then(({ data }) => setBarbers((data ?? []).map((b) => ({ id: b.id }))));
   }, [branchId]);
 
   useEffect(() => {

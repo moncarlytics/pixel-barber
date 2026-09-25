@@ -4,11 +4,12 @@
 // address (never delivered), and the test sets a KNOWN token with the service-role-only helper,
 // since the real token only exists in the (skipped) email.
 //
-// Selector correction against the real rendered markup: apps/staff/app/login/page.tsx's
-// identifier input uses placeholder text from Login.identifierPlaceholder ("Email or phone"), not
-// "Email" -- the task brief's draft used getByPlaceholder('Email'), which doesn't match anything
-// on the page. Everything else in the brief (labels/buttons in
-// apps/staff/app/settings/staff/page.tsx + InviteStaffForm.tsx, and Role:/Branch:/Choose a
+// Selector note against the real rendered markup: apps/staff/app/login/page.tsx's identifier input
+// uses placeholder text from Login.identifierPlaceholder ("Email or phone"). Playwright's
+// getByPlaceholder matches substrings case-insensitively by default, so getByPlaceholder('Email')
+// would also match this input -- it's not that it fails to match, just that 'Email or phone' is the
+// more precise selector, so this spec keeps using it. Everything else in the brief (labels/buttons
+// in apps/staff/app/settings/staff/page.tsx + InviteStaffForm.tsx, and Role:/Branch:/Choose a
 // password/Confirm password/Set password and sign in on apps/staff/app/invite/[token]/page.tsx)
 // matches the current markup and apps/staff/messages/en.json verbatim.
 import { config } from 'dotenv';

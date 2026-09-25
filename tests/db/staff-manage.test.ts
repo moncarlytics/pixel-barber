@@ -14,6 +14,7 @@ import {
   hashToken,
   setInviteToken,
   signIn,
+  trackStaff,
   type StaffAccount,
   type StaffInviteFixture,
 } from './fixtures/staff-invite';
@@ -89,19 +90,55 @@ describe('staff-manage', () => {
     expect((await manage('revoke', active.staffUserId)).status).toBe(409);
   });
 
-  it('revokes a pending invite, clearing its token, and only once', async () => {
+  it('revokes a pending invite by hard-deleting the never-accepted account, and only once', async () => {
     expect((await manage('revoke', toRevoke.staffUserId)).status).toBe(200);
-    const row = await readInvite(toRevoke.staffUserId);
-    expect(row.invite_status).toBe('revoked');
-    expect(row.invite_token_hash).toBeNull();
-    expect((await manage('revoke', toRevoke.staffUserId)).status).toBe(409);
+
+    const { data: staffRow } = await f.admin
+      .from('staff_users')
+      .select('id')
+      .eq('id', toRevoke.staffUserId)
+      .maybeSingle();
+    expect(staffRow).toBeNull();
+
+    const { data: authUserData, error: authUserError } = await f.admin.auth.admin.getUserById(
+      toRevoke.authUserId,
+    );
+    expect(authUserData?.user ?? null).toBeNull();
+    expect(authUserError).not.toBeNull();
+
+    // The row is gone, so a second revoke of the same id can't find it -- 404, not 409.
+    expect((await manage('revoke', toRevoke.staffUserId)).status).toBe(404);
   });
 
-  it('deactivates an account so it cannot sign in, and reactivates it', async () => {
+  it('lets the same email be invited again after its pending invite was revoked', async () => {
+    const result = await callFunction(
+      'staff-invite',
+      { name: 'SI Test Re-Invited', role: 'analyst', email: toRevoke.email },
+      f.owner.accessToken,
+    );
+    expect(result.status).toBe(201);
+    trackStaff(f, result.body.staff_user_id as string);
+  });
+
+  it('deactivates an account so it cannot sign in, takes its barber offline, and reactivates it', async () => {
+    // Starts 'available' (not the fixture's default 'offline') so the post-deactivate check below
+    // actually proves staff-manage reset it, rather than it having never changed.
+    await f.admin
+      .from('barbers')
+      .update({ status: 'available' })
+      .eq('staff_user_id', active.staffUserId);
+
     expect((await manage('deactivate', active.staffUserId)).status).toBe(200);
     expect((await readInvite(active.staffUserId)).is_active).toBe(false);
     await expect(signIn({ email: active.email })).rejects.toBeTruthy();
     expect((await manage('deactivate', active.staffUserId)).status).toBe(409);
+
+    const { data: barberRow } = await f.admin
+      .from('barbers')
+      .select('status')
+      .eq('staff_user_id', active.staffUserId)
+      .single();
+    expect(barberRow!.status).toBe('offline');
 
     expect((await manage('reactivate', active.staffUserId)).status).toBe(200);
     expect((await readInvite(active.staffUserId)).is_active).toBe(true);
