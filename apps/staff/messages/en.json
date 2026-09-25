@@ -6,7 +6,8 @@
   },
   "Login": {
     "title": "Staff Login",
-    "emailPlaceholder": "Email",
+    "identifierPlaceholder": "Email or phone",
+    "invalidIdentifier": "Enter a valid email or Ghana phone number.",
     "passwordPlaceholder": "Password",
     "logIn": "Log In",
     "pinLoginLink": "Shared station? Log in with PIN"

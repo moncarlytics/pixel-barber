@@ -5,46 +5,34 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient } from '@pixel-barber/shared';
+import { parseLoginIdentifier } from './identifier';
+import { postLoginPath } from './postLoginPath';
 
 export default function StaffLoginPage() {
   const router = useRouter();
   const t = useTranslations('Login');
   const supabase = createBrowserSupabaseClient();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const login = parseLoginIdentifier(identifier);
+    if (!login) {
+      setError(t('invalidIdentifier'));
+      return;
+    }
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword(
+      'email' in login ? { email: login.email, password } : { phone: login.phone, password },
+    );
     if (signInError) {
       setError(signInError.message);
       return;
     }
-    // Route barbers to Today's Queue (Phase 5's own screen) instead of always landing on /tickets --
-    // previously only the PIN login path (login/pin/page.tsx) reached /queue/today, so a barber
-    // signing in with a password (App Flow 9.1's other login mode) had no path to this phase's screen.
-    const { data: staffUser } = await supabase
-      .from('staff_users')
-      .select('id')
-      .eq('auth_user_id', signInData.user!.id)
-      .maybeSingle();
-    if (staffUser) {
-      const { data: barberRow } = await supabase
-        .from('barbers')
-        .select('id')
-        .eq('staff_user_id', staffUser.id)
-        .maybeSingle();
-      if (barberRow) {
-        router.push('/queue/today');
-        return;
-      }
-    }
-    router.push('/tickets');
+    // Barbers land on Today's Queue, everyone else on /tickets (shared with Accept Invite).
+    router.push(await postLoginPath(supabase, signInData.user!.id));
   }
 
   return (
@@ -53,10 +41,11 @@ export default function StaffLoginPage() {
       {error && <p role="alert">{error}</p>}
       <form onSubmit={handleSubmit}>
         <input
-          type="email"
-          placeholder={t('emailPlaceholder')}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text"
+          autoComplete="username"
+          placeholder={t('identifierPlaceholder')}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
         />
         <input
