@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       .eq('id', target.id)
       .eq('invite_status', 'pending')
       .select('id');
-    if (error || !data || data.length === 0) {
+    if (error) {
       const { error: compensationError } = await setBan(UNBANNED);
       if (compensationError) {
         console.error('staff-manage: COMPENSATION FAILED', {
@@ -107,7 +107,26 @@ Deno.serve(async (req) => {
           error: compensationError,
         });
       }
-      if (error) return json(500, { error: 'Could not revoke the invite' });
+      return json(500, { error: 'Could not revoke the invite' });
+    }
+    if (!data || data.length === 0) {
+      const { data: reread } = await admin
+        .from('staff_users')
+        .select('invite_status, is_active')
+        .eq('id', target.id)
+        .maybeSingle();
+      if (reread?.invite_status === 'revoked') {
+        return json(409, { error: 'Only a pending invite can be revoked' });
+      }
+      const { error: compensationError } = await setBan(UNBANNED);
+      if (compensationError) {
+        console.error('staff-manage: COMPENSATION FAILED', {
+          action: 'revoke',
+          staffUserId: target.id,
+          authUserId: target.auth_user_id,
+          error: compensationError,
+        });
+      }
       return json(409, { error: 'Only a pending invite can be revoked' });
     }
     return json(200, { ok: true });
@@ -128,7 +147,7 @@ Deno.serve(async (req) => {
       .eq('invite_status', 'accepted')
       .eq('is_active', true)
       .select('id');
-    if (error || !data || data.length === 0) {
+    if (error) {
       const { error: compensationError } = await setBan(UNBANNED);
       if (compensationError) {
         console.error('staff-manage: COMPENSATION FAILED', {
@@ -138,7 +157,26 @@ Deno.serve(async (req) => {
           error: compensationError,
         });
       }
-      if (error) return json(500, { error: 'Could not deactivate the account' });
+      return json(500, { error: 'Could not deactivate the account' });
+    }
+    if (!data || data.length === 0) {
+      const { data: reread } = await admin
+        .from('staff_users')
+        .select('invite_status, is_active')
+        .eq('id', target.id)
+        .maybeSingle();
+      if (reread?.invite_status === 'accepted' && reread?.is_active === false) {
+        return json(409, { error: 'Only an active account can be deactivated' });
+      }
+      const { error: compensationError } = await setBan(UNBANNED);
+      if (compensationError) {
+        console.error('staff-manage: COMPENSATION FAILED', {
+          action: 'deactivate',
+          staffUserId: target.id,
+          authUserId: target.auth_user_id,
+          error: compensationError,
+        });
+      }
       return json(409, { error: 'Only an active account can be deactivated' });
     }
     return json(200, { ok: true });
