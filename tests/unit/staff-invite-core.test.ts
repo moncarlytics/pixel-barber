@@ -5,6 +5,7 @@
 // building, and SMS/email delivery with a stubbed fetch.
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildAuthUserAttributes,
   buildInviteMessage,
   generateInviteToken,
   hashInviteToken,
@@ -26,6 +27,31 @@ const MESSAGE: InviteMessage = {
 function stubFetch(status: number, body: string) {
   return vi.fn(async () => new Response(body, { status }));
 }
+
+describe('buildAuthUserAttributes', () => {
+  it('gives a phone invite a confirmed phone plus a hidden, undeliverable internal email', () => {
+    const attrs = buildAuthUserAttributes({ phone: '+233244123456' });
+    expect(attrs).toMatchObject({
+      phone: '+233244123456',
+      phone_confirm: true,
+      email_confirm: true,
+    });
+    expect(attrs.email).toMatch(/^staff-[0-9a-f-]{36}@staff\.pixelbarber\.invalid$/);
+  });
+
+  it('gives each phone invite a different internal email', () => {
+    const a = buildAuthUserAttributes({ phone: '+233244123456' });
+    const b = buildAuthUserAttributes({ phone: '+233244123456' });
+    expect(a.email).not.toBe(b.email);
+  });
+
+  it('leaves an email invite with just its confirmed email', () => {
+    expect(buildAuthUserAttributes({ email: 'kofi@example.com' })).toEqual({
+      email: 'kofi@example.com',
+      email_confirm: true,
+    });
+  });
+});
 
 describe('tokens', () => {
   it('generates 43-character base64url tokens that differ each time', () => {

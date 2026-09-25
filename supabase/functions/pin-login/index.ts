@@ -58,9 +58,29 @@ Deno.serve(async (req) => {
     });
   }
 
+  // The magiclink needs the LOGIN's email, not staff_users.email: SMS-invited barbers have no
+  // staff email, but their login carries a hidden internal one (staff-<uuid>@staff.pixelbarber.invalid,
+  // set by staff-invite) purely so this exchange works for them too.
+  const { data: staffRow } = await admin
+    .from('staff_users')
+    .select('auth_user_id')
+    .eq('id', candidate.staff_user_id)
+    .single();
+  const { data: authData } = staffRow
+    ? await admin.auth.admin.getUserById(staffRow.auth_user_id)
+    : { data: null };
+  const loginEmail = authData?.user?.email;
+  if (!loginEmail) {
+    console.error('pin-login: matched barber has no login email', candidate.staff_user_id);
+    return new Response(JSON.stringify({ error: 'Login failed' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: 'magiclink',
-    email: candidate.email,
+    email: loginEmail,
   });
   if (linkError || !linkData) {
     return new Response(JSON.stringify({ error: 'Login failed' }), {

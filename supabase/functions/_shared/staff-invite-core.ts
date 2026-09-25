@@ -24,6 +24,31 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   analyst: 'Analyst',
 };
 
+// Phone-only staff logins also get a hidden email on this reserved, never-deliverable domain
+// (RFC 2606 `.invalid`): pin-login can only mint a session through an email magiclink, and
+// Supabase has no phone equivalent. The address is never shown or sent anything; staff_users.email
+// stays null, so every screen keeps showing the phone.
+export const INTERNAL_EMAIL_DOMAIN = 'staff.pixelbarber.invalid';
+
+export type AuthUserAttributes =
+  | { phone: string; phone_confirm: true; email: string; email_confirm: true }
+  | { email: string; email_confirm: true };
+
+/** The attributes staff-invite creates the login with (no password: set on accept). */
+export function buildAuthUserAttributes(
+  contact: { phone: string } | { email: string },
+): AuthUserAttributes {
+  if ('phone' in contact) {
+    return {
+      phone: contact.phone,
+      phone_confirm: true,
+      email: `staff-${crypto.randomUUID()}@${INTERNAL_EMAIL_DOMAIN}`,
+      email_confirm: true,
+    };
+  }
+  return { email: contact.email, email_confirm: true };
+}
+
 export const INVITE_VALID_DAYS = 7;
 export const MIN_PASSWORD_LENGTH = 8;
 export const CONTACT_IN_USE_MESSAGE = 'That phone number or email is already used by an account';

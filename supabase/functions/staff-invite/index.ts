@@ -9,6 +9,7 @@ import { authorizeManageStaff } from '../_shared/staff-auth.ts';
 import { deliveryConfigFromEnv, staffAppUrl } from '../_shared/staff-invite-env.ts';
 import {
   CONTACT_IN_USE_MESSAGE,
+  buildAuthUserAttributes,
   buildInviteMessage,
   generateInviteToken,
   hashInviteToken,
@@ -65,8 +66,9 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (existing) return json(409, { error: CONTACT_IN_USE_MESSAGE });
 
+  // Phone invites also get a hidden internal email so PIN login can mint their sessions.
   const { data: created, error: createError } = await admin.auth.admin.createUser(
-    phone ? { phone, phone_confirm: true } : { email: email!, email_confirm: true },
+    buildAuthUserAttributes(phone ? { phone } : { email: email! }),
   );
   if (createError || !created?.user) {
     if (createError && isAlreadyRegistered(createError)) {
