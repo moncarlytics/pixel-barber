@@ -205,6 +205,23 @@
     "nameRequired": "Enter a name.",
     "contactRequired": "Enter a phone number or email."
   },
+  "AcceptInvite": {
+    "title": "Join Pixel Barber",
+    "loading": "Checking your invite…",
+    "invited": "You've been invited to join Pixel Barber.",
+    "nameLine": "Name: {name}",
+    "roleLine": "Role: {role}",
+    "branchLine": "Branch: {branch}",
+    "invalid": "This invite is no longer valid — ask your Owner to send a new one.",
+    "passwordLabel": "Choose a password",
+    "confirmLabel": "Confirm password",
+    "submit": "Set password and sign in",
+    "tooShort": "Password must be at least 8 characters.",
+    "mismatch": "Passwords don't match.",
+    "failed": "Something went wrong. Please try again.",
+    "signInFailed": "Your password is set, but signing in failed. Please log in from the login page.",
+    "goToLogin": "Go to login"
+  },
   "TodaysQueue": {
     "title": "Today's Queue",
     "noBarberProfile": "No barber profile found for this account.",
