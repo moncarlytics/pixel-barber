@@ -61,15 +61,18 @@ Deno.serve(async (req) => {
     if (!baseUrl)
       return json(500, { error: 'Invites are not configured (STAFF_APP_URL is missing)' });
     const token = generateInviteToken();
-    const { error } = await admin
+    const { data, error } = await admin
       .from('staff_users')
       .update({
         invite_token_hash: await hashInviteToken(token),
         invite_expires_at: inviteExpiry().toISOString(),
       })
       .eq('id', target.id)
-      .eq('invite_status', 'pending');
+      .eq('invite_status', 'pending')
+      .select('id');
     if (error) return json(500, { error: 'Could not resend the invite' });
+    if (!data || data.length === 0)
+      return json(409, { error: 'Only a pending invite can be resent' });
     const message = buildInviteMessage({
       name: target.name,
       role: target.role as StaffRole,
@@ -88,13 +91,24 @@ Deno.serve(async (req) => {
       return json(409, { error: 'Only a pending invite can be revoked' });
     const { error: banError } = await setBan(BANNED);
     if (banError) return json(500, { error: 'Could not revoke the invite' });
-    const { error } = await admin
+    const { data, error } = await admin
       .from('staff_users')
       .update({ invite_status: 'revoked', invite_token_hash: null, invite_expires_at: null })
-      .eq('id', target.id);
-    if (error) {
-      await setBan(UNBANNED);
-      return json(500, { error: 'Could not revoke the invite' });
+      .eq('id', target.id)
+      .eq('invite_status', 'pending')
+      .select('id');
+    if (error || !data || data.length === 0) {
+      const { error: compensationError } = await setBan(UNBANNED);
+      if (compensationError) {
+        console.error('staff-manage: COMPENSATION FAILED', {
+          action: 'revoke',
+          staffUserId: target.id,
+          authUserId: target.auth_user_id,
+          error: compensationError,
+        });
+      }
+      if (error) return json(500, { error: 'Could not revoke the invite' });
+      return json(409, { error: 'Only a pending invite can be revoked' });
     }
     return json(200, { ok: true });
   }
@@ -107,13 +121,25 @@ Deno.serve(async (req) => {
     }
     const { error: banError } = await setBan(BANNED);
     if (banError) return json(500, { error: 'Could not deactivate the account' });
-    const { error } = await admin
+    const { data, error } = await admin
       .from('staff_users')
       .update({ is_active: false })
-      .eq('id', target.id);
-    if (error) {
-      await setBan(UNBANNED);
-      return json(500, { error: 'Could not deactivate the account' });
+      .eq('id', target.id)
+      .eq('invite_status', 'accepted')
+      .eq('is_active', true)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      const { error: compensationError } = await setBan(UNBANNED);
+      if (compensationError) {
+        console.error('staff-manage: COMPENSATION FAILED', {
+          action: 'deactivate',
+          staffUserId: target.id,
+          authUserId: target.auth_user_id,
+          error: compensationError,
+        });
+      }
+      if (error) return json(500, { error: 'Could not deactivate the account' });
+      return json(409, { error: 'Only an active account can be deactivated' });
     }
     return json(200, { ok: true });
   }
@@ -122,11 +148,31 @@ Deno.serve(async (req) => {
   if (target.invite_status !== 'accepted' || target.is_active) {
     return json(409, { error: 'Only a deactivated account can be reactivated' });
   }
+  const { data, error } = await admin
+    .from('staff_users')
+    .update({ is_active: true })
+    .eq('id', target.id)
+    .eq('invite_status', 'accepted')
+    .eq('is_active', false)
+    .select('id');
+  if (error) return json(500, { error: 'Could not reactivate the account' });
+  if (!data || data.length === 0)
+    return json(409, { error: 'Only a deactivated account can be reactivated' });
+
   const { error: unbanError } = await setBan(UNBANNED);
-  if (unbanError) return json(500, { error: 'Could not reactivate the account' });
-  const { error } = await admin.from('staff_users').update({ is_active: true }).eq('id', target.id);
-  if (error) {
-    await setBan(BANNED);
+  if (unbanError) {
+    const { error: revertError } = await admin
+      .from('staff_users')
+      .update({ is_active: false })
+      .eq('id', target.id);
+    if (revertError) {
+      console.error('staff-manage: COMPENSATION FAILED', {
+        action: 'reactivate',
+        staffUserId: target.id,
+        authUserId: target.auth_user_id,
+        error: revertError,
+      });
+    }
     return json(500, { error: 'Could not reactivate the account' });
   }
   return json(200, { ok: true });
