@@ -1,8 +1,11 @@
 // supabase/functions/_shared/staff-invite-core.ts
 // Pure logic shared by the staff-invite, staff-manage and staff-invite-accept Edge Functions.
-// No Deno APIs and no imports, so Vitest can import it directly
+// No Deno APIs and imports only ./arkesel.ts, so Vitest can import it directly
 // (tests/unit/staff-invite-core.test.ts). Deno-only glue (env, clients) lives in the functions and
 // in _shared/staff-auth.ts / _shared/staff-invite-env.ts.
+
+import { isArkeselSuccess, sendArkeselSms } from './arkesel.ts';
+export { isArkeselSuccess };
 
 export const STAFF_ROLES = [
   'owner',
@@ -191,21 +194,6 @@ export type DeliveryResult =
 
 export type InviteTarget = { phone: string } | { email: string };
 
-// Copy of supabase/functions/send-sms/index.ts isArkeselSuccess (that module calls Deno.serve on
-// import, so it can't be imported here). Arkesel's confirmed v2 success shape is
-// { status: "success", data: {...} }: a non-2xx is always a failure, and a 2xx body that explicitly
-// says status !== "success" is also a failure; anything else 2xx is treated as success.
-export function isArkeselSuccess(httpOk: boolean, rawBody: string): boolean {
-  if (!httpOk) return false;
-  try {
-    const parsed = JSON.parse(rawBody) as { status?: string };
-    if (parsed.status === undefined) return true;
-    return parsed.status === 'success';
-  } catch {
-    return true;
-  }
-}
-
 /**
  * Sends the invite by SMS (Arkesel) or email (Resend). Never throws.
  * Email addresses ending in ".local" are reserved and never deliverable -- automated tests use
@@ -243,23 +231,17 @@ export async function sendInvite(
       return response.ok ? { delivered: true } : { delivered: false, reason: 'provider_error' };
     }
 
-    if (!config.arkeselApiKey || !config.arkeselSenderId) {
-      return { delivered: false, reason: 'sms_not_configured' };
-    }
-    const response = await fetchImpl('https://sms.arkesel.com/api/v2/sms/send', {
-      method: 'POST',
-      headers: { 'api-key': config.arkeselApiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sender: config.arkeselSenderId,
-        message: message.sms,
-        recipients: [target.phone],
-      }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const rawBody = await response.text();
-    return isArkeselSuccess(response.ok, rawBody)
-      ? { delivered: true }
-      : { delivered: false, reason: 'provider_error' };
+    const smsResult = await sendArkeselSms(
+      target.phone,
+      message.sms,
+      { apiKey: config.arkeselApiKey, senderId: config.arkeselSenderId },
+      fetchImpl,
+    );
+    if (smsResult === 'sent') return { delivered: true };
+    return {
+      delivered: false,
+      reason: smsResult === 'not_configured' ? 'sms_not_configured' : 'provider_error',
+    };
   } catch {
     return { delivered: false, reason: 'provider_error' };
   }
