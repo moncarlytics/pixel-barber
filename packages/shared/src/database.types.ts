@@ -905,6 +905,8 @@ export type Database = {
           channel: Database['public']['Enums']['notification_channel'];
           created_at: string;
           delivered_at: string | null;
+          dispatch_attempts: number;
+          dispatch_claimed_at: string | null;
           failed_reason: string | null;
           id: string;
           notification_type: string;
@@ -920,6 +922,8 @@ export type Database = {
           channel: Database['public']['Enums']['notification_channel'];
           created_at?: string;
           delivered_at?: string | null;
+          dispatch_attempts?: number;
+          dispatch_claimed_at?: string | null;
           failed_reason?: string | null;
           id?: string;
           notification_type: string;
@@ -935,6 +939,8 @@ export type Database = {
           channel?: Database['public']['Enums']['notification_channel'];
           created_at?: string;
           delivered_at?: string | null;
+          dispatch_attempts?: number;
+          dispatch_claimed_at?: string | null;
           failed_reason?: string | null;
           id?: string;
           notification_type?: string;
@@ -1474,6 +1480,22 @@ export type Database = {
       auth_branch_ids: { Args: never; Returns: string[] };
       auth_role: { Args: never; Returns: string };
       auth_staff_id: { Args: never; Returns: string };
+      claim_sms_notifications: {
+        Args: { p_types: string[]; p_limit: number };
+        Returns: {
+          notification_id: string;
+          notification_type: string;
+          created_at: string;
+          dispatch_attempts: number;
+          customer_id: string;
+          phone_e164: string | null;
+          sms_backup_enabled: boolean | null;
+          ticket_id: string | null;
+          ticket_state: Database['public']['Enums']['ticket_state'] | null;
+          ticket_number: string | null;
+          branch_name: string | null;
+        }[];
+      };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };
       fill_barber_schedule: {
         Args: { p_barber_id?: string | null };
