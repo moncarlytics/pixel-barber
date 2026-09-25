@@ -315,6 +315,12 @@ verify_jwt = false
 [functions.pin-login]
 verify_jwt = false
 
+# Staff invitation: the invitee has no session yet when they open their invite link (App Flow
+# 8.15), so the platform JWT gate is disabled for this one function. The 256-bit invite token,
+# checked by hash inside the function, is the real authentication.
+[functions.staff-invite-accept]
+verify_jwt = false
+
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
 enabled = false
