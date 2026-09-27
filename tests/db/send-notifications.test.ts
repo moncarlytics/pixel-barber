@@ -14,18 +14,32 @@ import {
 } from './fixtures/staff-invite';
 
 type Reason = 'stale' | 'expired' | 'opted_out' | 'no_phone' | 'sms_disabled';
+// 'stale_waiting' is a second case proving the "only almost_turn is sendable" rule: a ticket back in
+// 'waiting' is stale even with a fresh notification. It is a distinct case label from the reason it
+// expects ('stale'), unlike every other label here, so its expected reason is looked up separately.
+type CaseLabel = Reason | 'stale_waiting';
 
 let f: StaffInviteFixture;
 const customerIds: string[] = [];
 const ticketIds: string[] = [];
-const notificationIds: Partial<Record<Reason, string>> = {};
+const notificationIds: Partial<Record<CaseLabel, string>> = {};
+const expectedReason: Record<CaseLabel, Reason> = {
+  stale: 'stale',
+  expired: 'expired',
+  opted_out: 'opted_out',
+  no_phone: 'no_phone',
+  sms_disabled: 'sms_disabled',
+  stale_waiting: 'stale',
+};
 const serviceRoleKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const anonKey = () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 async function makeCase(
-  label: Reason,
+  label: CaseLabel,
   opts: {
-    ticketState?: 'waiting' | 'called';
+    // Only 'almost_turn' is sendable; 'waiting' proves the stale_waiting case; 'called' proves the
+    // plain stale case.
+    ticketState?: 'waiting' | 'almost_turn' | 'called';
     smsBackup?: boolean;
     phone?: string | null;
     ageMinutes?: number;
@@ -50,7 +64,7 @@ async function makeCase(
       branch_id: f.branchId,
       customer_id: customer!.id,
       branch_service_id: f.branchServiceId,
-      state: opts.ticketState ?? 'waiting',
+      state: opts.ticketState ?? 'almost_turn',
       created_by: 'staff',
     })
     .select('id')
@@ -80,6 +94,7 @@ beforeAll(async () => {
   await makeCase('opted_out', { smsBackup: false });
   await makeCase('no_phone', { phone: null });
   await makeCase('sms_disabled', {});
+  await makeCase('stale_waiting', { ticketState: 'waiting' });
 }, 60000);
 
 afterAll(async () => {
@@ -116,10 +131,10 @@ describe('send-notifications', () => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
     const byId = new Map(rows.map((r) => [r.id, r]));
-    for (const [reason, id] of Object.entries(notificationIds)) {
+    for (const [label, id] of Object.entries(notificationIds)) {
       expect(byId.get(id!)).toMatchObject({
         status: 'failed',
-        failed_reason: reason,
+        failed_reason: expectedReason[label as CaseLabel],
         sent_at: null,
       });
     }
