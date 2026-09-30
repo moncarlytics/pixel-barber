@@ -158,7 +158,8 @@ enabled = true
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://localhost:3000"
+# Per-environment (supabase/.secrets/send-sms.env for staging, production.env for production).
+site_url = "env(AUTH_SITE_URL)"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
@@ -298,7 +299,8 @@ uri = "pg-functions://postgres/public/custom_access_token_hook"
 # same secret, which the send-sms Edge Function verifies before trusting the payload.
 [auth.hook.send_sms]
 enabled = true
-uri = "https://bfkokxcdgvrnevtpeycw.supabase.co/functions/v1/send-sms"
+# Per-environment: each project's own send-sms function (see supabase/.secrets/*.env).
+uri = "env(SEND_SMS_HOOK_URI)"
 secrets = "env(SEND_SMS_HOOK_SECRET)"
 
 # Auth Hooks are called by GoTrue directly, not by an end-user client -- they never carry a normal
