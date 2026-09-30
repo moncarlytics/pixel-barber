@@ -14,6 +14,29 @@ const admin = createClient<Database>(url, serviceRoleKey, {
 });
 
 const suffix = Date.now();
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+
+/**
+ * Today's branch hours around "now", matching how branch_status_view reads them: the database's
+ * now() is UTC, so the weekday and times are UTC too (a local-clock getDay() picks the wrong day near
+ * midnight in any other timezone). Branch hours can't cross midnight, so the window is clamped to the
+ * current UTC day -- otherwise a late-evening run produced e.g. 23:10 -> 02:10, which the view
+ * (correctly) reports as closed.
+ */
+function hoursAroundNow(beforeMs: number, afterMs: number) {
+  const now = new Date();
+  const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dayEnd = dayStart + 24 * HOUR - 1000; // 23:59:59
+  const hhmmss = (ms: number) => new Date(ms).toISOString().slice(11, 19);
+  return {
+    dayOfWeek: now.getUTCDay(),
+    opensAt: hhmmss(Math.max(now.getTime() - beforeMs, dayStart)),
+    closesAt: hhmmss(Math.min(now.getTime() + afterMs, dayEnd)),
+    minutesLeftToday: (dayEnd - now.getTime()) / MINUTE,
+  };
+}
+
 let businessId: string;
 let branchId: string;
 let serviceId: string;
@@ -66,11 +89,10 @@ afterAll(async () => {
 });
 
 describe('branch_status_view', () => {
-  it("reports open when now falls inside today's hours", async () => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString().slice(11, 19);
-    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
+  it("reports open when now falls inside today's hours", async (ctx) => {
+    const { dayOfWeek, opensAt, closesAt, minutesLeftToday } = hoursAroundNow(HOUR, 2 * HOUR);
+    // 'open' needs closing time at least 30 minutes away within the same UTC day.
+    if (minutesLeftToday < 35) ctx.skip();
     await admin.from('branch_hours').upsert(
       {
         branch_id: branchId,
@@ -90,11 +112,13 @@ describe('branch_status_view', () => {
     expect(data?.status).toBe('open');
   });
 
-  it('reports closing_soon within 30 minutes of close', async () => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const opensAt = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
-    const closesAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString().slice(11, 19);
+  it('reports closing_soon within 30 minutes of close', async (ctx) => {
+    const { dayOfWeek, opensAt, closesAt, minutesLeftToday } = hoursAroundNow(
+      2 * HOUR,
+      10 * MINUTE,
+    );
+    // Closing 10 minutes from now must still fall within the same UTC day.
+    if (minutesLeftToday < 12) ctx.skip();
     await admin.from('branch_hours').upsert(
       {
         branch_id: branchId,
@@ -115,10 +139,7 @@ describe('branch_status_view', () => {
   });
 
   it('reports closed on a day marked is_closed, even during what would otherwise be open hours', async () => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString().slice(11, 19);
-    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
+    const { dayOfWeek, opensAt, closesAt } = hoursAroundNow(HOUR, 2 * HOUR);
     await admin.from('branch_hours').upsert(
       {
         branch_id: branchId,
@@ -139,10 +160,7 @@ describe('branch_status_view', () => {
   });
 
   it('reports temporarily_closed when the branch flag is set, overriding hours', async () => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const opensAt = new Date(now.getTime() - 60 * 60 * 1000).toISOString().slice(11, 19);
-    const closesAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(11, 19);
+    const { dayOfWeek, opensAt, closesAt } = hoursAroundNow(HOUR, 2 * HOUR);
     await admin.from('branch_hours').upsert(
       {
         branch_id: branchId,
