@@ -36,7 +36,26 @@
     "noCustomerAccount": "No customer account for this number — create one below.",
     "failed": "Couldn't log in. Please try again.",
     "sessionEnded": "Your session ended — log back in to continue.",
-    "newHere": "New here? Create an account"
+    "newHere": "New here? Create an account",
+    "forgotPassword": "Forgot password?"
+  },
+  "ForgotPassword": {
+    "title": "Reset Password",
+    "phoneIntro": "Enter your phone number and we'll text you a code.",
+    "phonePlaceholder": "0244123456",
+    "sendCode": "Send Code",
+    "invalidPhone": "Enter a valid 10-digit Ghana phone number.",
+    "noAccount": "No customer account for this number.",
+    "sendFailed": "We couldn't send a code right now. Please try again later.",
+    "codeIntro": "Enter the 6-digit code we texted you.",
+    "codePlaceholder": "6-digit code",
+    "verify": "Verify",
+    "badCode": "That code is incorrect or has expired.",
+    "passwordPlaceholder": "New password",
+    "passwordTooShort": "Use at least {min} characters.",
+    "savePassword": "Save new password",
+    "failed": "Something went wrong. Please try again.",
+    "backToLogin": "Back to log in"
   },
   "Tickets": {
     "title": "My Tickets"

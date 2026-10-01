@@ -20,9 +20,10 @@ test.describe('customer login', () => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const suffix = String(Date.now());
-  // Local-format numbers (0 + 9 digits), as a customer would type them.
-  const customerLocal = `05${suffix.slice(-8)}`;
-  const staffLocal = `02${suffix.slice(-8)}`;
+  // Local-format numbers (0 + 9 digits), as a customer would type them. 050… / 020…: distinct from
+  // customer-forgot-password.spec.ts's 057… / 027… (both files load at once).
+  const customerLocal = `050${suffix.slice(-7)}`;
+  const staffLocal = `020${suffix.slice(-7)}`;
   const toE164 = (local: string) => `+233${local.slice(1)}`;
 
   let customerAuthId: string;
@@ -32,11 +33,12 @@ test.describe('customer login', () => {
   let branchId: string;
 
   test.beforeAll(async () => {
-    const { data: customerAuth } = await admin.auth.admin.createUser({
+    const { data: customerAuth, error: customerAuthError } = await admin.auth.admin.createUser({
       phone: toE164(customerLocal),
       password: PASSWORD,
       phone_confirm: true,
     });
+    if (customerAuthError) throw customerAuthError;
     customerAuthId = customerAuth!.user.id;
     const { data: customer } = await admin
       .from('customers')
@@ -51,11 +53,12 @@ test.describe('customer login', () => {
     customerId = customer!.id;
 
     // A phone-only staff login (like an SMS-invited barber) with no customer profile.
-    const { data: staffAuth } = await admin.auth.admin.createUser({
+    const { data: staffAuth, error: staffAuthError } = await admin.auth.admin.createUser({
       phone: toE164(staffLocal),
       password: PASSWORD,
       phone_confirm: true,
     });
+    if (staffAuthError) throw staffAuthError;
     staffAuthId = staffAuth!.user.id;
     const { data: staffRow } = await admin
       .from('staff_users')

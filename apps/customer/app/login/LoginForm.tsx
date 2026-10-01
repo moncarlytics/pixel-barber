@@ -47,7 +47,8 @@ export default function LoginForm() {
       .eq('auth_user_id', data.user.id)
       .maybeSingle();
     if (customerError || !customer) {
-      await supabase.auth.signOut();
+      // This device only: a staff member's other sessions (e.g. a barber station) stay signed in.
+      await supabase.auth.signOut({ scope: 'local' });
       setError(customerError ? t('failed') : t('noCustomerAccount'));
       setSubmitting(false);
       return;
@@ -83,6 +84,15 @@ export default function LoginForm() {
           {t('submit')}
         </button>
       </form>
+      <Link
+        href={
+          searchParams.get('next')
+            ? `/forgot-password?next=${encodeURIComponent(nextPath)}`
+            : '/forgot-password'
+        }
+      >
+        {t('forgotPassword')}
+      </Link>
       <Link href="/onboard">{t('newHere')}</Link>
     </main>
   );
