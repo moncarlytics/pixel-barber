@@ -179,6 +179,25 @@ describe('activate_due_appointments', () => {
     await f.admin.from('barbers').update({ status: 'available' }).eq('id', f.barberB.barberId);
   });
 
+  it('reassigns when the preferred barber has ended their shift', async () => {
+    // Customer 0's ticket from the previous case is still active; finish it so they are free.
+    const { data: active } = await f.admin
+      .from('queue_tickets')
+      .select('id')
+      .eq('customer_id', f.customers[0].customerId)
+      .eq('branch_id', f.branchId)
+      .not('state', 'in', '(completed,cancelled,no_show)');
+    for (const t of active ?? []) {
+      await f.admin.from('queue_tickets').update({ state: 'completed' }).eq('id', t.id);
+    }
+    await f.admin.from('barbers').update({ status: 'end_of_shift' }).eq('id', f.barberB.barberId);
+    const id = await dueAppointment(0, f.barberB.barberId);
+    await activate();
+    const [ticket] = await ticketsFor(id);
+    expect(ticket.assigned_barber_id).toBe(f.barberA.barberId);
+    await f.admin.from('barbers').update({ status: 'available' }).eq('id', f.barberB.barberId);
+  });
+
   it('cancels an appointment whose branch is closed today', async () => {
     const today = new Date().toISOString().slice(0, 10);
     await f.admin
