@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
+import { sessionEndedLoginPath } from '../login/nextPath';
 
 type Barber = Database['public']['Tables']['barbers']['Row'];
 
@@ -105,8 +106,7 @@ export default function BookFlow() {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) {
-      setError(t('notSignedIn'));
-      setSubmitting(false);
+      router.push(sessionEndedLoginPath(`/book?branch=${branchId}`));
       return;
     }
     const response = await fetch(

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -149,6 +150,13 @@ export default function OnboardWizard() {
             required
           />
           <button type="submit">{t('sendCode')}</button>
+          <Link
+            href={
+              fromBranch ? `/login?next=${encodeURIComponent(`/branches/${fromBranch}`)}` : '/login'
+            }
+          >
+            {t('haveAccount')}
+          </Link>
         </form>
       )}
       {step === 'otp' && (

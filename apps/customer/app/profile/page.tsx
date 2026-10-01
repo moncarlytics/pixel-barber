@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, AVATAR_LIBRARY } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
+import { sessionEndedLoginPath } from '../login/nextPath';
 
 type Customer = Database['public']['Tables']['customers']['Row'];
 type Branch = Database['public']['Tables']['branches']['Row'];
@@ -23,7 +24,7 @@ export default function ProfilePage() {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) {
-      router.push('/onboard');
+      router.push(sessionEndedLoginPath('/profile'));
       return;
     }
     const { data: customerRow } = await supabase

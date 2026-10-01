@@ -119,6 +119,11 @@ export default function BranchDetailPage() {
 
       <Link href={joinHref}>{t('joinQueue')}</Link>
       <Link href={joinHref}>{t('bookAppointment')}</Link>
+      {hasSession === false && (
+        <Link href={`/login?next=${encodeURIComponent(`/branches/${params.id}`)}`}>
+          {t('haveAccount')}
+        </Link>
+      )}
     </main>
   );
 }

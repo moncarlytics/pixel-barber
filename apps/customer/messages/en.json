@@ -23,7 +23,20 @@
     "leadTimeSecondaryLabel": "And again this many minutes before",
     "finishSetup": "Finish Setup",
     "welcomeTitle": "You're All Set!",
-    "welcomeMessage": "Welcome to Pixel Barber."
+    "welcomeMessage": "Welcome to Pixel Barber.",
+    "haveAccount": "Already have an account? Log in"
+  },
+  "Login": {
+    "title": "Log In",
+    "phonePlaceholder": "0244123456",
+    "passwordPlaceholder": "Password",
+    "submit": "Log In",
+    "invalidPhone": "Enter a valid 10-digit Ghana phone number.",
+    "incorrect": "Phone number or password is incorrect.",
+    "noCustomerAccount": "No customer account for this number — create one below.",
+    "failed": "Couldn't log in. Please try again.",
+    "sessionEnded": "Your session ended — log back in to continue.",
+    "newHere": "New here? Create an account"
   },
   "Tickets": {
     "title": "My Tickets"
@@ -75,6 +88,7 @@
     "noBarbers": "No barbers listed yet.",
     "joinQueue": "Join Queue",
     "bookAppointment": "Book Appointment",
+    "haveAccount": "Already have an account? Log in",
     "closedOnDay": "Closed",
     "days": {
       "0": "Sunday",
@@ -97,7 +111,6 @@
     "confirmJoin": "Join Now",
     "alreadyInQueue": "You're already in the queue for this branch.",
     "viewTicket": "View My Ticket",
-    "notSignedIn": "Not signed in.",
     "joinFailed": "Failed to join queue.",
     "priceLabel": "— GHS {price}",
     "availabilityStepTitle": "Barber Availability",
