@@ -1484,6 +1484,13 @@ export type Database = {
         Args: { p_branch_service_id: string; p_barber_id: string | null; p_slot_start: string };
         Returns: string;
       };
+      cancel_appointment: {
+        Args: {
+          p_appointment_id: string;
+          p_reason: Database['public']['Enums']['cancel_reason'];
+        };
+        Returns: undefined;
+      };
       claim_sms_notifications: {
         Args: { p_types: string[]; p_limit: number };
         Returns: {
@@ -1601,6 +1608,10 @@ export type Database = {
       next_ticket_number: { Args: { p_branch_id: string }; Returns: string };
       recalculate_positions: {
         Args: { p_barber_id: string; p_branch_id: string };
+        Returns: undefined;
+      };
+      reschedule_appointment: {
+        Args: { p_appointment_id: string; p_slot_start: string };
         Returns: undefined;
       };
       reset_barber_schedule_day: {
