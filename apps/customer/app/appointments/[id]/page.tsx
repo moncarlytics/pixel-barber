@@ -28,6 +28,7 @@ interface Loaded {
   appointment: Appointment;
   serviceName: string;
   branchName: string;
+  barberName: string | null;
   priceGhs: number | null;
   changeable: boolean;
 }
@@ -67,24 +68,30 @@ export default function AppointmentDetailPage() {
         setNotFound(true);
         return;
       }
-      const [{ data: bs }, { data: price }, { data: branch }] = await Promise.all([
-        supabase
-          .from('branch_services')
-          .select('services(name)')
-          .eq('id', appointment.branch_service_id)
-          .maybeSingle(),
-        supabase
-          .from('current_branch_service_price')
-          .select('price_ghs')
-          .eq('branch_service_id', appointment.branch_service_id)
-          .maybeSingle(),
-        supabase.from('branches').select('name').eq('id', appointment.branch_id).maybeSingle(),
-      ]);
+      const [{ data: bs }, { data: price }, { data: branch }, { data: barbers }] =
+        await Promise.all([
+          supabase
+            .from('branch_services')
+            .select('services(name)')
+            .eq('id', appointment.branch_service_id)
+            .maybeSingle(),
+          supabase
+            .from('current_branch_service_price')
+            .select('price_ghs')
+            .eq('branch_service_id', appointment.branch_service_id)
+            .maybeSingle(),
+          supabase.from('branches').select('name').eq('id', appointment.branch_id).maybeSingle(),
+          supabase.rpc('list_bookable_barbers', { p_branch_id: appointment.branch_id }),
+        ]);
       if (cancelled) return;
       setLoaded({
         appointment,
         serviceName: (bs?.services as unknown as { name: string } | null)?.name ?? '',
         branchName: branch?.name ?? '',
+        // A chosen barber who has since left the branch is no longer listed: fall back to generic text.
+        barberName:
+          (barbers ?? []).find((b) => b.id === appointment.preferred_barber_id)?.display_name ??
+          null,
         priceGhs: price?.price_ghs ?? null,
         // Computed here (not in render) to keep render pure.
         changeable:
@@ -106,7 +113,7 @@ export default function AppointmentDetailPage() {
       </main>
     ) : null;
   }
-  const { appointment, serviceName, branchName, priceGhs, changeable } = loaded;
+  const { appointment, serviceName, branchName, barberName, priceGhs, changeable } = loaded;
 
   function goBack() {
     setMode('view');
@@ -163,7 +170,13 @@ export default function AppointmentDetailPage() {
       <p>{t('branchLabel', { branch: branchName })}</p>
       <p>{t('serviceLabel', { service: serviceName })}</p>
       {priceGhs !== null && <p>{t('priceLabel', { price: priceGhs.toFixed(2) })}</p>}
-      <p>{appointment.preferred_barber_id ? t('chosenBarber') : t('anyBarber')}</p>
+      <p>
+        {barberName
+          ? t('barberLabel', { barber: barberName })
+          : appointment.preferred_barber_id
+            ? t('chosenBarber')
+            : t('anyBarber')}
+      </p>
       <p>{t('statusLabel', { status: appointment.status })}</p>
 
       {mode === 'view' &&

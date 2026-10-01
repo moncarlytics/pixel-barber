@@ -137,6 +137,7 @@
     "timeLabel": "Time: {time}",
     "serviceLabel": "Service: {service}",
     "priceLabel": "Price: GHS {price}",
+    "barberLabel": "Barber: {barber}",
     "chosenBarber": "Barber: your chosen barber",
     "anyBarber": "Barber: any available",
     "statusLabel": "Status: {status}",

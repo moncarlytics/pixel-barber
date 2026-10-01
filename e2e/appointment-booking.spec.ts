@@ -145,7 +145,7 @@ test('customer books, reschedules and cancels an appointment', async ({
     await page.goto(`/book?branch=${branch!.id}`);
     await main.getByRole('button', { name: 'Schedule' }).press('Enter');
     await main.getByRole('button', { name: new RegExp(serviceName) }).press('Enter');
-    await main.getByRole('button', { name: barber!.id }).press('Enter');
+    await main.getByRole('button', { name: 'Appt E2E Barber' }).press('Enter');
     await main.getByRole('button', { name: tomorrowLabel }).press('Enter');
     await main.getByRole('button', { name: '10:00' }).press('Enter');
     await main.getByRole('button', { name: 'Book Appointment' }).press('Enter');

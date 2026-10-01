@@ -8,9 +8,8 @@
 // client AND cross-surface on the fallback barber's own real Today's Queue screen.
 //
 // Selectors below were verified against the REAL current rendered markup, not the plan's draft:
-//   - apps/customer/app/book/BookFlow.tsx: the barber-selection step renders each barber's raw
-//     `b.id` as its button text (no Barbers Management yet, a known pre-existing limitation, not
-//     this task's problem to fix); the service step's buttons render the service's real name, which
+//   - apps/customer/app/book/BookFlow.tsx: the barber-selection step renders each barber's display
+//     name (list_bookable_barbers' display_name) as its button text; the service step's buttons render the service's real name, which
 //     is fixture data this test doesn't control, so the first (only, for this fixture's one
 //     branch_service) button is clicked instead of matching literal text -- the same technique
 //     e2e/queue-join-now.spec.ts already uses for this exact step. The availability step's copy
@@ -280,8 +279,14 @@ test.describe('barber assignment cross-surface journey', () => {
       // unscoped getByRole('button').first() was resolving to THAT button instead of the real
       // service button, silently stranding the flow on the service step for the rest of the test
       // (found by comparing the failure's page snapshot against BookFlow.tsx's real DOM structure).
-      await customerPage.locator('main').getByRole('button').first().press('Enter');
-      await customerPage.getByRole('button', { name: busyBarberId }).press('Enter');
+      // The service buttons are list items (the Join Now / Schedule toggle above them is not).
+      await customerPage
+        .locator('main')
+        .getByRole('listitem')
+        .getByRole('button')
+        .first()
+        .press('Enter');
+      await customerPage.getByRole('button', { name: 'Baj Busy Barber' }).press('Enter');
 
       // Ineligible-but-scheduled-today -> the availability prompt should appear.
       await expect(customerPage.getByText('Barber Availability')).toBeVisible({ timeout: 15000 });

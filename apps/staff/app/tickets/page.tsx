@@ -7,7 +7,7 @@ import type { Database } from '@pixel-barber/shared';
 import AddWalkInModal from './AddWalkInModal';
 
 type Ticket = Database['public']['Tables']['queue_tickets']['Row'];
-type Barber = Database['public']['Tables']['barbers']['Row'];
+type Barber = Database['public']['Functions']['list_bookable_barbers']['Returns'][number];
 type Branch = Database['public']['Tables']['branches']['Row'];
 
 export default function StaffTicketsPage() {
@@ -175,7 +175,7 @@ export default function StaffTicketsPage() {
       <ul>
         {barbers.map((barber) => (
           <li key={barber.id}>
-            {barber.id} — {barber.status}
+            {barber.display_name} — {barber.status}
             <button type="button" onClick={() => handleBarberStatus(barber, 'available')}>
               {t('statusAvailable')}
             </button>

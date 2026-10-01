@@ -19,7 +19,7 @@ export default function AddWalkInModal({
   const t = useTranslations('LiveQueue');
   const supabase = createBrowserSupabaseClient();
   const [services, setServices] = useState<ServiceOption[]>([]);
-  const [barbers, setBarbers] = useState<{ id: string }[]>([]);
+  const [barbers, setBarbers] = useState<{ id: string; name: string }[]>([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -47,7 +47,9 @@ export default function AddWalkInModal({
   useEffect(() => {
     supabase
       .rpc('list_bookable_barbers', { p_branch_id: branchId })
-      .then(({ data }) => setBarbers((data ?? []).map((b) => ({ id: b.id }))));
+      .then(({ data }) =>
+        setBarbers((data ?? []).map((b) => ({ id: b.id, name: b.display_name }))),
+      );
   }, [branchId]);
 
   useEffect(() => {
@@ -172,7 +174,7 @@ export default function AddWalkInModal({
           <option value="">{t('walkInBarber')}</option>
           {barbers.map((b) => (
             <option key={b.id} value={b.id}>
-              {b.id}
+              {b.name}
             </option>
           ))}
         </select>

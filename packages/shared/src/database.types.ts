@@ -1569,21 +1569,12 @@ export type Database = {
       list_bookable_barbers: {
         Args: { p_branch_id: string };
         Returns: {
-          average_rating: number | null;
-          created_at: string;
-          current_ticket_id: string | null;
-          home_branch_id: string;
           id: string;
           staff_user_id: string;
+          home_branch_id: string;
           status: Database['public']['Enums']['barber_status'];
-          updated_at: string;
+          display_name: string;
         }[];
-        SetofOptions: {
-          from: '*';
-          to: 'barbers';
-          isOneToOne: false;
-          isSetofReturn: true;
-        };
       };
       list_manageable_barbers: {
         Args: never;

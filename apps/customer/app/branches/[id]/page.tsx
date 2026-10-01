@@ -9,7 +9,7 @@ import type { Database } from '@pixel-barber/shared';
 
 type Branch = Database['public']['Tables']['branches']['Row'];
 type BranchHour = Database['public']['Tables']['branch_hours']['Row'];
-type Barber = Database['public']['Tables']['barbers']['Row'];
+type Barber = Database['public']['Functions']['list_bookable_barbers']['Returns'][number];
 
 interface ServiceRow {
   branchServiceId: string;
@@ -112,7 +112,7 @@ export default function BranchDetailPage() {
       ) : (
         <ul>
           {barbers.map((b) => (
-            <li key={b.id}>{b.id}</li>
+            <li key={b.id}>{b.display_name}</li>
           ))}
         </ul>
       )}

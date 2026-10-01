@@ -9,7 +9,7 @@ import { sessionEndedLoginPath } from '../login/nextPath';
 import SlotPicker, { formatSlotDate, formatSlotTime } from '../appointments/SlotPicker';
 import { appointmentErrorKey } from '../appointments/appointmentErrors';
 
-type Barber = Database['public']['Tables']['barbers']['Row'];
+type Barber = Database['public']['Functions']['list_bookable_barbers']['Returns'][number];
 
 interface ServiceOption {
   branchServiceId: string;
@@ -185,6 +185,9 @@ export default function BookFlow() {
   }
 
   if (!branchId) return null;
+  const selectedBarberName = selectedBarberId
+    ? barbers.find((b) => b.id === selectedBarberId)?.display_name
+    : undefined;
 
   return (
     <main>
@@ -240,7 +243,7 @@ export default function BookFlow() {
             {barbers.map((b) => (
               <li key={b.id}>
                 <button type="button" onClick={() => handleSelectBarber(b.id)}>
-                  {b.id}
+                  {b.display_name}
                 </button>
               </li>
             ))}
@@ -277,7 +280,7 @@ export default function BookFlow() {
         <div>
           <h2>{t('reviewTitle')}</h2>
           <p>{services.find((s) => s.branchServiceId === selectedServiceId)?.serviceName}</p>
-          <p>{selectedBarberId ? selectedBarberId : t('anyAvailable')}</p>
+          <p>{selectedBarberName ?? t('anyAvailable')}</p>
           <button type="button" disabled={submitting} onClick={handleConfirmJoin}>
             {t('confirmJoin')}
           </button>
@@ -304,7 +307,7 @@ export default function BookFlow() {
         <div>
           <h2>{t('scheduleReviewTitle')}</h2>
           <p>{services.find((s) => s.branchServiceId === selectedServiceId)?.serviceName}</p>
-          <p>{selectedBarberId ? selectedBarberId : t('anyAvailable')}</p>
+          <p>{selectedBarberName ?? t('anyAvailable')}</p>
           <p>
             {formatSlotDate(slotStart)} {formatSlotTime(slotStart)}
           </p>
