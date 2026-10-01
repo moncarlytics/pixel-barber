@@ -46,7 +46,8 @@ describe('staff_list_appointment_slots', () => {
     const soon = nextGridSlot();
     const day = soon.slice(0, 10);
     // Barber B has no break, so the only reason a customer can't take this slot is the 1-hour rule.
-    if (day !== dateAt(0)) ctx.skip(); // crossed UTC midnight
+    if (new Date(Date.parse(soon) + 1_800_000 - 1).toISOString().slice(0, 10) !== dateAt(0))
+      ctx.skip(); // slot crosses UTC midnight
     const { data: staffSlots, error } = await reception.client.rpc('staff_list_appointment_slots', {
       p_branch_service_id: f.branchServiceId,
       p_barber_id: f.barberB.barberId,
@@ -173,6 +174,26 @@ describe('staff_book_appointment', () => {
       });
       expect(error?.message).toBe('not_allowed');
     }
+  });
+
+  it('lets staff book a slot less than an hour away that a customer cannot', async (ctx) => {
+    const soon = nextGridSlot();
+    if (new Date(Date.parse(soon) + 1_800_000 - 1).toISOString().slice(0, 10) !== dateAt(0))
+      ctx.skip(); // slot crosses UTC midnight
+    const viaCustomer = await f.customers[3].client.rpc('book_appointment', {
+      p_branch_service_id: f.branchServiceId,
+      p_barber_id: f.barberB.barberId,
+      p_slot_start: soon,
+    });
+    expect(viaCustomer.error?.message).toBe('too_soon');
+    const viaStaff = await reception.client.rpc('staff_book_appointment', {
+      p_branch_service_id: f.branchServiceId,
+      p_barber_id: f.barberB.barberId,
+      p_slot_start: soon,
+      p_customer_name: 'x',
+      p_customer_phone: f.customers[3].phone,
+    });
+    expect(viaStaff.error).toBeNull();
   });
 });
 
