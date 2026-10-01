@@ -3,8 +3,21 @@
 // (Docs/superpowers/specs/2026-09-25-queue-sms-notifications-design.md). No Deno APIs, so Vitest
 // can import it.
 
-/** Notification types the sender texts. Enabling another type later is a one-line change. */
-export const SMS_NOTIFICATION_TYPES = ['youre_next'] as const;
+/**
+ * Notification types the sender texts, each with the ticket states in which its text still makes
+ * sense. A claimed row whose ticket has moved on (or a type not listed here) is 'stale'.
+ */
+const SENDABLE_TICKET_STATES: Record<string, ReadonlySet<string>> = {
+  // Second in line right now. A ticket back in 'waiting' (it dropped back after a skip) is stale:
+  // its one-per-ticket row was claimed for a moment that has passed.
+  youre_next: new Set(['almost_turn']),
+  // Called to the chair, or the arrival grace period after the call; not once service has started.
+  your_turn: new Set(['called', 'grace_period']),
+  // Released as a no-show and not since rejoined/changed.
+  ticket_released: new Set(['no_show']),
+};
+export const SMS_NOTIFICATION_TYPES = ['youre_next', 'your_turn', 'ticket_released'] as const;
+export type SmsNotificationType = (typeof SMS_NOTIFICATION_TYPES)[number];
 export const DISPATCH_BATCH_SIZE = 50;
 export const MAX_DISPATCH_ATTEMPTS = 3;
 export const MAX_NOTIFICATION_AGE_MINUTES = 10;
@@ -30,11 +43,6 @@ export interface ClaimedNotification {
   branch_name: string | null;
 }
 
-// Only a ticket that is currently second in line ('almost_turn') is sendable. A ticket back in
-// 'waiting' -- e.g. it dropped back after a skip -- is stale: its one-per-ticket 'youre_next' row
-// was already claimed for a moment that has passed.
-const SENDABLE_TICKET_STATES = new Set(['almost_turn']);
-
 /**
  * Decides one claimed notification, checking stale → expired → opted_out → no_phone →
  * not_allowlisted → live. `allowlist`, when a non-empty set, restricts sending to the phone numbers
@@ -47,7 +55,8 @@ export function decideNotification(
   live: boolean,
   allowlist?: ReadonlySet<string> | null,
 ): { action: 'send' } | { action: 'skip'; reason: SkipReason } {
-  if (!n.ticket_id || !n.ticket_state || !SENDABLE_TICKET_STATES.has(n.ticket_state)) {
+  const sendableStates = SENDABLE_TICKET_STATES[n.notification_type];
+  if (!n.ticket_id || !n.ticket_state || !sendableStates?.has(n.ticket_state)) {
     return { action: 'skip', reason: 'stale' };
   }
   const ageMs = now.getTime() - new Date(n.created_at).getTime();
@@ -95,6 +104,21 @@ export function buildYoureNextSms(input: {
   link: string;
 }): string {
   return `Pixel Barber: You're next at ${input.branchName}! Please head over now. Ticket ${input.ticketNumber}: ${input.link}`;
+}
+
+/** The text for one enabled notification type. */
+export function buildNotificationSms(
+  type: SmsNotificationType,
+  input: { branchName: string; ticketNumber: string; link: string },
+): string {
+  switch (type) {
+    case 'youre_next':
+      return buildYoureNextSms(input);
+    case 'your_turn':
+      return `Pixel Barber: It's your turn at ${input.branchName}! Please go to your barber now. Ticket ${input.ticketNumber}: ${input.link}`;
+    case 'ticket_released':
+      return `Pixel Barber: Your ticket ${input.ticketNumber} at ${input.branchName} was released because you weren't available in time. Rejoin here: ${input.link}`;
+  }
 }
 
 /** After a provider error on a row that has now been attempted `attemptsSoFar` times. */

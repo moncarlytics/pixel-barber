@@ -17,7 +17,15 @@ type Reason = 'stale' | 'expired' | 'opted_out' | 'no_phone' | 'sms_disabled';
 // 'stale_waiting' is a second case proving the "only almost_turn is sendable" rule: a ticket back in
 // 'waiting' is stale even with a fresh notification. It is a distinct case label from the reason it
 // expects ('stale'), unlike every other label here, so its expected reason is looked up separately.
-type CaseLabel = Reason | 'stale_waiting';
+// The your_turn / ticket_released cases prove those types are claimed and decided by their own
+// sendable states (called/grace_period and no_show) rather than youre_next's.
+type CaseLabel =
+  | Reason
+  | 'stale_waiting'
+  | 'turn_disabled'
+  | 'turn_stale'
+  | 'released_disabled'
+  | 'released_stale';
 
 let f: StaffInviteFixture;
 const customerIds: string[] = [];
@@ -30,6 +38,10 @@ const expectedReason: Record<CaseLabel, Reason> = {
   no_phone: 'no_phone',
   sms_disabled: 'sms_disabled',
   stale_waiting: 'stale',
+  turn_disabled: 'sms_disabled',
+  turn_stale: 'stale',
+  released_disabled: 'sms_disabled',
+  released_stale: 'stale',
 };
 const serviceRoleKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const anonKey = () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -39,7 +51,8 @@ async function makeCase(
   opts: {
     // Only 'almost_turn' is sendable; 'waiting' proves the stale_waiting case; 'called' proves the
     // plain stale case.
-    ticketState?: 'waiting' | 'almost_turn' | 'called';
+    ticketState?: 'waiting' | 'almost_turn' | 'called' | 'completed' | 'no_show';
+    type?: 'youre_next' | 'your_turn' | 'ticket_released';
     smsBackup?: boolean;
     phone?: string | null;
     ageMinutes?: number;
@@ -77,7 +90,7 @@ async function makeCase(
       recipient_type: 'customer',
       recipient_id: customer!.id,
       channel: 'sms',
-      notification_type: 'youre_next',
+      notification_type: opts.type ?? 'youre_next',
       related_ticket_id: ticket!.id,
       created_at: new Date(Date.now() - (opts.ageMinutes ?? 0) * 60_000).toISOString(),
     })
@@ -95,6 +108,10 @@ beforeAll(async () => {
   await makeCase('no_phone', { phone: null });
   await makeCase('sms_disabled', {});
   await makeCase('stale_waiting', { ticketState: 'waiting' });
+  await makeCase('turn_disabled', { type: 'your_turn', ticketState: 'called' });
+  await makeCase('turn_stale', { type: 'your_turn', ticketState: 'completed' });
+  await makeCase('released_disabled', { type: 'ticket_released', ticketState: 'no_show' });
+  await makeCase('released_stale', { type: 'ticket_released', ticketState: 'waiting' });
 }, 60000);
 
 afterAll(async () => {
@@ -132,11 +149,17 @@ describe('send-notifications', () => {
     }
     const byId = new Map(rows.map((r) => [r.id, r]));
     for (const [label, id] of Object.entries(notificationIds)) {
-      expect(byId.get(id!)).toMatchObject({
-        status: 'failed',
-        failed_reason: expectedReason[label as CaseLabel],
-        sent_at: null,
-      });
+      const expected = expectedReason[label as CaseLabel];
+      const row = byId.get(id!);
+      expect(row).toMatchObject({ status: 'failed', sent_at: null });
+      // A row that would have been texted is 'sms_disabled' -- or 'not_allowlisted' when this
+      // project has an SMS_NOTIFICATIONS_ALLOWLIST set for a manual live test (that check runs
+      // first). Either way nothing was sent.
+      if (expected === 'sms_disabled') {
+        expect(['sms_disabled', 'not_allowlisted']).toContain(row!.failed_reason);
+      } else {
+        expect(row!.failed_reason).toBe(expected);
+      }
     }
   }, 60000);
 });

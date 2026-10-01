@@ -15,12 +15,13 @@ import {
   RUN_DEADLINE_MS,
   SMS_NOTIFICATION_TYPES,
   afterProviderError,
-  buildYoureNextSms,
+  buildNotificationSms,
   decideNotification,
   isUsableCustomerAppUrl,
   parseAllowlist,
   ticketLink,
   type ClaimedNotification,
+  type SmsNotificationType,
 } from '../_shared/notification-sms-core.ts';
 
 async function isServiceRoleCaller(authHeader: string | null): Promise<boolean> {
@@ -118,7 +119,8 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    const message = buildYoureNextSms({
+    // decideNotification only returns 'send' for a type listed in SMS_NOTIFICATION_TYPES.
+    const message = buildNotificationSms(n.notification_type as SmsNotificationType, {
       branchName: n.branch_name ?? 'Pixel Barber',
       ticketNumber: n.ticket_number ?? '',
       link: ticketLink(customerAppUrl, n.ticket_id!),

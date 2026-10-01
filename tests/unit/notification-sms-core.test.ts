@@ -4,7 +4,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { sendArkeselSms } from '../../supabase/functions/_shared/arkesel';
 import {
+  SMS_NOTIFICATION_TYPES,
   afterProviderError,
+  buildNotificationSms,
   buildYoureNextSms,
   decideNotification,
   isUsableCustomerAppUrl,
@@ -171,6 +173,72 @@ describe('message building', () => {
     ).toBe(
       "Pixel Barber: You're next at Osu Branch! Please head over now. Ticket A12: http://x/tickets/t1",
     );
+  });
+
+  it('builds each enabled type through buildNotificationSms', () => {
+    const input = { branchName: 'Osu Branch', ticketNumber: 'A12', link: 'http://x/tickets/t1' };
+    expect(buildNotificationSms('youre_next', input)).toBe(buildYoureNextSms(input));
+    expect(buildNotificationSms('your_turn', input)).toBe(
+      "Pixel Barber: It's your turn at Osu Branch! Please go to your barber now. Ticket A12: http://x/tickets/t1",
+    );
+    expect(buildNotificationSms('ticket_released', input)).toBe(
+      "Pixel Barber: Your ticket A12 at Osu Branch was released because you weren't available in time. Rejoin here: http://x/tickets/t1",
+    );
+  });
+});
+
+describe('your_turn and ticket_released', () => {
+  it('enables all three types', () => {
+    expect([...SMS_NOTIFICATION_TYPES].sort()).toEqual(
+      ['ticket_released', 'your_turn', 'youre_next'].sort(),
+    );
+  });
+
+  it.each([
+    ['your_turn', 'called', 'send'],
+    ['your_turn', 'grace_period', 'send'],
+    ['your_turn', 'in_service', 'stale'],
+    ['your_turn', 'cancelled', 'stale'],
+    ['your_turn', 'almost_turn', 'stale'],
+    ['ticket_released', 'no_show', 'send'],
+    ['ticket_released', 'waiting', 'stale'],
+    ['ticket_released', 'called', 'stale'],
+    ['youre_next', 'called', 'stale'],
+  ])('%s with the ticket in %s → %s', (type, state, expected) => {
+    const decision = decideNotification(
+      row({ notification_type: type, ticket_state: state }),
+      NOW,
+      true,
+    );
+    expect(decision).toEqual(
+      expected === 'send' ? { action: 'send' } : { action: 'skip', reason: expected },
+    );
+  });
+
+  it('treats an unknown notification type as stale, never sendable', () => {
+    expect(
+      decideNotification(
+        row({ notification_type: 'ticket_created', ticket_state: 'waiting' }),
+        NOW,
+        true,
+      ),
+    ).toEqual({ action: 'skip', reason: 'stale' });
+  });
+
+  it('keeps the same safety rules for the new types', () => {
+    const turn = row({ notification_type: 'your_turn', ticket_state: 'called' });
+    expect(decideNotification({ ...turn, created_at: '2026-09-25T11:49:59Z' }, NOW, true)).toEqual({
+      action: 'skip',
+      reason: 'expired',
+    });
+    expect(decideNotification(turn, NOW, false)).toEqual({
+      action: 'skip',
+      reason: 'sms_disabled',
+    });
+    expect(decideNotification(turn, NOW, true, new Set(['+233200000000']))).toEqual({
+      action: 'skip',
+      reason: 'not_allowlisted',
+    });
   });
 });
 
