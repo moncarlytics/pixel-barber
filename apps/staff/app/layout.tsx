@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
+import { StaffHeader } from './StaffHeader';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -11,7 +12,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider>
+          <StaffHeader />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

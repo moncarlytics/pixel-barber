@@ -5,6 +5,9 @@
     "barbersLink": "Barbers",
     "staffLink": "Staff & Roles"
   },
+  "Header": {
+    "logOut": "Log out"
+  },
   "Login": {
     "title": "Staff Login",
     "identifierPlaceholder": "Email or phone",
