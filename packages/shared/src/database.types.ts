@@ -1480,6 +1480,10 @@ export type Database = {
       auth_branch_ids: { Args: never; Returns: string[] };
       auth_role: { Args: never; Returns: string };
       auth_staff_id: { Args: never; Returns: string };
+      book_appointment: {
+        Args: { p_branch_service_id: string; p_barber_id: string | null; p_slot_start: string };
+        Returns: string;
+      };
       claim_sms_notifications: {
         Args: { p_types: string[]; p_limit: number };
         Returns: {
@@ -1544,6 +1548,10 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      list_appointment_slots: {
+        Args: { p_branch_service_id: string; p_barber_id: string | null; p_date: string };
+        Returns: string[];
       };
       list_bookable_barbers: {
         Args: { p_branch_id: string };
@@ -1622,7 +1630,8 @@ export type Database = {
         | 'changed_plans'
         | 'found_another_barber'
         | 'emergency'
-        | 'other';
+        | 'other'
+        | 'branch_closed';
       check_in_method: 'app_tap' | 'qr_code' | 'staff' | 'geofence';
       consent_type: 'transactional' | 'marketing';
       notification_channel: 'sms' | 'push';
@@ -1788,6 +1797,7 @@ export const Constants = {
         'found_another_barber',
         'emergency',
         'other',
+        'branch_closed',
       ],
       check_in_method: ['app_tap', 'qr_code', 'staff', 'geofence'],
       consent_type: ['transactional', 'marketing'],
