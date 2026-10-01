@@ -1558,7 +1558,12 @@ export type Database = {
         };
       };
       list_appointment_slots: {
-        Args: { p_branch_service_id: string; p_barber_id: string | null; p_date: string };
+        Args: {
+          p_branch_service_id: string;
+          p_barber_id: string | null;
+          p_date: string;
+          p_ignore_appointment_id?: string | null;
+        };
         Returns: string[];
       };
       list_bookable_barbers: {

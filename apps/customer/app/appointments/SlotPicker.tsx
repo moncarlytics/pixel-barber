@@ -29,10 +29,18 @@ interface Props {
   onPick: (slotStart: string) => void;
   /** Bump to reload the open times (e.g. after "That time was just taken"). */
   refreshKey?: number;
+  /** The caller's own appointment to ignore, so rescheduling can offer other times that day. */
+  ignoreAppointmentId?: string | null;
 }
 
 /** Date & Time step: today + the next 14 days, then the open 30-minute slots on the chosen day. */
-export default function SlotPicker({ branchServiceId, barberId, onPick, refreshKey = 0 }: Props) {
+export default function SlotPicker({
+  branchServiceId,
+  barberId,
+  onPick,
+  refreshKey = 0,
+  ignoreAppointmentId = null,
+}: Props) {
   const t = useTranslations('Appointments');
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   // Lazy initializer: computed once on mount, keeping render pure.
@@ -56,6 +64,7 @@ export default function SlotPicker({ branchServiceId, barberId, onPick, refreshK
         p_branch_service_id: branchServiceId,
         p_barber_id: barberId,
         p_date: date,
+        p_ignore_appointment_id: ignoreAppointmentId,
       })
       .then(({ data, error }) => {
         if (cancelled) return;
@@ -64,7 +73,7 @@ export default function SlotPicker({ branchServiceId, barberId, onPick, refreshK
     return () => {
       cancelled = true;
     };
-  }, [supabase, branchServiceId, barberId, date, requestKey]);
+  }, [supabase, branchServiceId, barberId, date, requestKey, ignoreAppointmentId]);
 
   const current = result && result.key === requestKey ? result : null;
 

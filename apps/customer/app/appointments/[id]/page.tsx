@@ -93,6 +93,12 @@ export default function AppointmentDetailPage() {
   if (!loaded) return null;
   const { appointment, serviceName, priceGhs, changeable } = loaded;
 
+  function goBack() {
+    setMode('view');
+    setReason(null);
+    setError(null);
+  }
+
   async function handleReschedule() {
     if (!newSlot) return;
     setBusy(true);
@@ -155,7 +161,7 @@ export default function AppointmentDetailPage() {
             </button>
           </div>
         ) : (
-          appointment.status === 'scheduled' && <p>{t('tooLateOnline')}</p>
+          <p>{t('tooLateOnline')}</p>
         ))}
 
       {mode === 'reschedule' && (
@@ -164,6 +170,7 @@ export default function AppointmentDetailPage() {
             branchServiceId={appointment.branch_service_id}
             barberId={appointment.preferred_barber_id}
             refreshKey={slotRefresh}
+            ignoreAppointmentId={appointment.id}
             onPick={(slot) => {
               setError(null);
               setNewSlot(slot);
@@ -177,7 +184,7 @@ export default function AppointmentDetailPage() {
           <button type="button" disabled={!newSlot || busy} onClick={handleReschedule}>
             {t('confirmReschedule')}
           </button>
-          <button type="button" onClick={() => setMode('view')}>
+          <button type="button" onClick={goBack}>
             {t('back')}
           </button>
         </div>
@@ -201,7 +208,7 @@ export default function AppointmentDetailPage() {
           <button type="button" disabled={!reason || busy} onClick={handleCancel}>
             {t('confirmCancel')}
           </button>
-          <button type="button" onClick={() => setMode('view')}>
+          <button type="button" onClick={goBack}>
             {t('back')}
           </button>
         </fieldset>

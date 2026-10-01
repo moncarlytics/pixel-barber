@@ -90,6 +90,21 @@ describe('reschedule_appointment', () => {
     expect((free ?? []).map((s) => new Date(s).toISOString())).toContain(slotAt(2, '10:00'));
   });
 
+  it('lists same-day slots when ignoring the callers own appointment, never anothers', async () => {
+    const list = async (c: 0 | 1, ignore?: string) => {
+      const { data } = await f.customers[c].client.rpc('list_appointment_slots', {
+        p_branch_service_id: f.branchServiceId,
+        p_barber_id: f.barberA.barberId,
+        p_date: dateAt(2),
+        ...(ignore ? { p_ignore_appointment_id: ignore } : {}),
+      });
+      return (data ?? []).map((s) => new Date(s).toISOString());
+    };
+    expect(await list(0)).toEqual([]);
+    expect(await list(0, apptId)).toContain(slotAt(2, '15:00'));
+    expect(await list(1, apptId)).toEqual([]);
+  });
+
   it("refuses someone else's appointment and one less than an hour away", async () => {
     const other = await f.customers[1].client.rpc('reschedule_appointment', {
       p_appointment_id: apptId,

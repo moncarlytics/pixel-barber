@@ -28,7 +28,6 @@ test('customer books, reschedules and cancels an appointment', async ({
   const phone = `+233556${suffix.slice(-6)}`;
   const barberEmail = `appt-e2e-${suffix}@test.pixelbarber.local`;
   const tomorrow = new Date(Date.now() + DAY).toISOString().slice(0, 10);
-  const dayAfter = new Date(Date.now() + 2 * DAY).toISOString().slice(0, 10);
   const serviceName = `Appt E2E Cut ${suffix}`;
 
   const { data: business } = await admin.from('businesses').select('id').limit(1).single();
@@ -141,7 +140,6 @@ test('customer books, reschedules and cancels an appointment', async ({
         timeZone: 'UTC',
       });
     const tomorrowLabel = labelFor(tomorrow);
-    const dayAfterLabel = labelFor(dayAfter);
 
     // --- Book 10:00 tomorrow ---
     await page.goto(`/book?branch=${branch!.id}`);
@@ -163,10 +161,9 @@ test('customer books, reschedules and cancels an appointment', async ({
     await entry.press('Enter');
     await expect(page).toHaveURL(/\/appointments\/[0-9a-f-]+$/, { timeout: 15000 });
 
-    // --- Reschedule to 11:00 the day after (the slot list excludes days where the customer
-    // already has an appointment, including this one, so the same day offers no times) ---
+    // --- Reschedule to 11:00 the same day ---
     await main.getByRole('button', { name: 'Reschedule' }).press('Enter');
-    await main.getByRole('button', { name: dayAfterLabel }).press('Enter');
+    await main.getByRole('button', { name: tomorrowLabel }).press('Enter');
     await main.getByRole('button', { name: '11:00' }).press('Enter');
     await main.getByRole('button', { name: 'Move to this time' }).press('Enter');
     await expect(main.getByText('Time: 11:00')).toBeVisible({ timeout: 15000 });
@@ -183,7 +180,7 @@ test('customer books, reschedules and cancels an appointment', async ({
       .eq('customer_id', customer!.id);
     expect(rows).toHaveLength(1);
     expect(rows![0]).toMatchObject({ status: 'cancelled', cancel_reason: 'cant_make_it' });
-    expect(new Date(rows![0].scheduled_start).toISOString()).toBe(`${dayAfter}T11:00:00.000Z`);
+    expect(new Date(rows![0].scheduled_start).toISOString()).toBe(`${tomorrow}T11:00:00.000Z`);
 
     await page.goto('/tickets');
     await expect(
