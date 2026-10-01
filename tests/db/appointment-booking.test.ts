@@ -116,6 +116,59 @@ describe('book_appointment', () => {
     expect(await slots(f.customers[3].client, null, 3)).not.toContain(at);
   });
 
+  it('does not count barbers without the skill toward "any barber" capacity', async () => {
+    const email = `appt-barber-c-${f.suffix}@test.pixelbarber.local`;
+    const { data: auth, error: authError } = await f.admin.auth.admin.createUser({
+      email,
+      password: 'Test-Password-123!',
+      email_confirm: true,
+    });
+    if (authError) throw authError;
+    let staffId: string | undefined;
+    let barberId: string | undefined;
+    try {
+      const { data: staff, error: staffError } = await f.admin
+        .from('staff_users')
+        .insert({
+          auth_user_id: auth.user.id,
+          name: 'Appt Barber c',
+          email,
+          role: 'barber',
+          invite_status: 'accepted',
+        })
+        .select('id')
+        .single();
+      if (staffError) throw staffError;
+      staffId = staff.id;
+      const { data: barber, error: barberError } = await f.admin
+        .from('barbers')
+        .insert({ staff_user_id: staff.id, home_branch_id: f.branchId, status: 'available' })
+        .select('id')
+        .single();
+      if (barberError) throw barberError;
+      barberId = barber.id;
+      // No barber_skills row: C works on day 7 but cannot do this service.
+      await f.admin.from('barber_schedule').delete().eq('barber_id', barber.id);
+      const { error: scheduleError } = await f.admin.from('barber_schedule').insert({
+        barber_id: barber.id,
+        work_date: dateAt(7),
+        branch_id: f.branchId,
+        shift_start: '00:00:00',
+        shift_end: '23:59:59',
+      });
+      if (scheduleError) throw scheduleError;
+
+      const at = slotAt(7, '10:00');
+      expect((await book(f.customers[0].client, f.barberA.barberId, at)).error).toBeNull();
+      expect((await book(f.customers[1].client, null, at)).error).toBeNull();
+      expect((await book(f.customers[2].client, null, at)).error?.message).toBe('slot_taken');
+    } finally {
+      if (barberId) await f.admin.from('barber_schedule').delete().eq('barber_id', barberId);
+      if (staffId) await f.admin.from('staff_users').delete().eq('id', staffId);
+      await f.admin.auth.admin.deleteUser(auth.user.id);
+    }
+  }, 60000);
+
   it('refuses a day the branch is closed', async () => {
     await f.admin
       .from('branch_closures')

@@ -113,7 +113,10 @@ async function createBarber(
     .select('id')
     .single();
   if (barberError) throw barberError;
-  await admin.from('barber_skills').insert({ barber_id: barber.id, service_id: serviceId });
+  const { error: skillError } = await admin
+    .from('barber_skills')
+    .insert({ barber_id: barber.id, service_id: serviceId });
+  if (skillError) throw skillError;
   // Replace any rows the schedule auto-fill may have created, then schedule all day for 16 days.
   await admin.from('barber_schedule').delete().eq('barber_id', barber.id);
   const { error: scheduleError } = await admin.from('barber_schedule').insert(
@@ -152,16 +155,19 @@ export async function createAppointmentFixture(): Promise<AppointmentFixture> {
 
   const branchId = await createBranch(admin, business!.id, 'Main', suffix);
   const closedBranchId = await createBranch(admin, business!.id, 'Closed', suffix);
-  const { data: bs } = await admin
+  const { data: bs, error: bsError } = await admin
     .from('branch_services')
     .insert({ branch_id: branchId, service_id: service.id })
     .select('id')
     .single();
-  const { data: closedBs } = await admin
+  const { data: closedBs, error: closedBsError } = await admin
     .from('branch_services')
     .insert({ branch_id: closedBranchId, service_id: service.id })
     .select('id')
     .single();
+
+  if (bsError) throw bsError;
+  if (closedBsError) throw closedBsError;
 
   const a = await createBarber(admin, 'a', suffix, branchId, service.id, true);
   const b = await createBarber(admin, 'b', suffix, branchId, service.id, false);
