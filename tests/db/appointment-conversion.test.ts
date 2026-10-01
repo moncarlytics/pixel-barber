@@ -292,4 +292,26 @@ describe('activate_due_appointments', () => {
       await f.admin.from('appointments').delete().eq('id', id);
     }
   });
+
+  it('converts a checked-in appointment into a ticket already marked present', async () => {
+    const customerIdx = 1;
+    await f.admin
+      .from('queue_tickets')
+      .update({ state: 'completed' })
+      .eq('customer_id', f.customers[customerIdx].customerId)
+      .not('state', 'in', '(completed,cancelled,no_show)');
+    const checkedInAt = new Date(Date.now() - 10 * 60_000).toISOString();
+    const id = await dueAppointment(customerIdx, f.barberA.barberId);
+    await f.admin
+      .from('appointments')
+      .update({ status: 'checked_in', checked_in_at: checkedInAt })
+      .eq('id', id);
+    await activate();
+    const [ticket] = await ticketsFor(id);
+    expect(ticket).toBeDefined();
+    expect(ticket.check_in_method).toBe('staff');
+    expect(new Date(ticket.checked_in_at!).toISOString()).toBe(checkedInAt);
+    const { data } = await f.admin.from('appointments').select('status').eq('id', id).single();
+    expect(data!.status).toBe('converted');
+  });
 });

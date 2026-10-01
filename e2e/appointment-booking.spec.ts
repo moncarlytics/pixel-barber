@@ -173,7 +173,7 @@ test('customer books, reschedules and cancels an appointment', async ({
     await main.getByRole('button', { name: 'Cancel appointment' }).press('Enter');
     await main.getByLabel("Can't make it").check();
     await main.getByRole('button', { name: 'Confirm cancellation' }).press('Enter');
-    await expect(main.getByText('Status: cancelled')).toBeVisible({ timeout: 15000 });
+    await expect(main.getByText('Status: Cancelled')).toBeVisible({ timeout: 15000 });
 
     const { data: rows } = await admin
       .from('appointments')

@@ -141,6 +141,14 @@
     "chosenBarber": "Barber: your chosen barber",
     "anyBarber": "Barber: any available",
     "statusLabel": "Status: {status}",
+    "statuses": {
+      "scheduled": "Booked",
+      "checked_in": "Checked in",
+      "converted": "In the queue",
+      "completed": "Done",
+      "cancelled": "Cancelled",
+      "no_show": "No-show"
+    },
     "reschedule": "Reschedule",
     "confirmReschedule": "Move to this time",
     "cancel": "Cancel appointment",

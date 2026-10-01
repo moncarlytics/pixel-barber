@@ -177,7 +177,7 @@ export default function AppointmentDetailPage() {
             ? t('chosenBarber')
             : t('anyBarber')}
       </p>
-      <p>{t('statusLabel', { status: appointment.status })}</p>
+      <p>{t('statusLabel', { status: t(`statuses.${appointment.status}`) })}</p>
 
       {mode === 'view' &&
         (changeable ? (

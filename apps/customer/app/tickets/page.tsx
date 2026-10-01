@@ -39,7 +39,7 @@ export default function TicketsPage() {
     supabase
       .from('appointments')
       .select('*, branches(name), branch_services(services(name))')
-      .eq('status', 'scheduled')
+      .in('status', ['scheduled', 'checked_in'])
       .gte('scheduled_start', new Date().toISOString())
       .order('scheduled_start')
       .then(({ data }) => setUpcoming((data as unknown as Appointment[] | null) ?? []));
