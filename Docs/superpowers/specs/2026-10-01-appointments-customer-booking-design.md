@@ -169,3 +169,17 @@ is half-saved: every write is a single function call in one transaction.
 Staff calendar, staff detail actions and booking on a customer's behalf (part 2); reminder texts,
 early check-in and walk-in buffer (part 3); appointment SMS confirmations; per-branch configurable
 rules (the standard set is fixed for now); deposits or payment.
+
+## Amendments (planning)
+
+- **"Any barber" conversions are assigned, not pooled.** Nothing in the app picks up a pooled
+  ticket, so conversion uses `find_eligible_barber`'s fallback exactly like joining the queue; the
+  ticket is pooled (unassigned) only if no barber is eligible at all.
+- **An existing active ticket takes the appointment.** A customer can hold only one active ticket per
+  branch, so if they already have one, it gets the `appointment_id` (and the priority) and no second
+  ticket is created.
+- **Skipped appointment tickets lose priority** (`skipped_at is not null`), otherwise Skip would
+  re-call them immediately.
+- **"Any barber" capacity** is counted per branch among the barbers skilled for the service who are working then and not named on an overlapping appointment (`appointment_slot_problem`, final form in migration 20261001090120).
+- **A cancelled appointment ticket cancels its appointment** with the ticket's reason.
+- Upcoming/Detail show "your chosen barber" / "any available": customers can't read staff names.

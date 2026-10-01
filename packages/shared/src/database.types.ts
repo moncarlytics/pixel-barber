@@ -1477,6 +1477,7 @@ export type Database = {
       };
     };
     Functions: {
+      activate_due_appointments: { Args: never; Returns: number };
       auth_branch_ids: { Args: never; Returns: string[] };
       auth_role: { Args: never; Returns: string };
       auth_staff_id: { Args: never; Returns: string };
