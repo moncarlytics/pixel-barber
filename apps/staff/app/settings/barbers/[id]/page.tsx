@@ -17,37 +17,42 @@ import UpcomingDays from './UpcomingDays';
 type ManageableBarber =
   Database['public']['Functions']['list_manageable_barbers']['Returns'][number];
 
+interface LoadResult {
+  forId: string;
+  loadError: boolean;
+  barber: ManageableBarber | null;
+  branches: ManageableBranch[];
+}
+
 export default function BarberDetailPage() {
   const t = useTranslations('BarberDetail');
   const params = useParams<{ id: string }>();
   const supabase = createBrowserSupabaseClient();
-  const [barber, setBarber] = useState<ManageableBarber | null>(null);
-  const [branches, setBranches] = useState<ManageableBranch[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  // Each load result remembers which barber id it was for, so switching to another barber shows
+  // nothing (not the previous barber) until that barber's own result arrives -- derived during
+  // render instead of resetting state synchronously inside the effect.
+  const [result, setResult] = useState<LoadResult | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setLoadError(false);
-    setLoaded(false);
-    setBarber(null);
+    const forId = params.id;
     Promise.all([supabase.rpc('list_manageable_barbers'), loadManageableBranches(supabase)])
       .then(([{ data, error }, manageable]) => {
         if (cancelled) return;
         if (error) {
-          setLoadError(true);
-          setLoaded(true);
+          setResult({ forId, loadError: true, barber: null, branches: [] });
           return;
         }
-        setBarber((data ?? []).find((b) => b.barber_id === params.id) ?? null);
-        setBranches(manageable);
-        setLoaded(true);
+        setResult({
+          forId,
+          loadError: false,
+          barber: (data ?? []).find((b) => b.barber_id === forId) ?? null,
+          branches: manageable,
+        });
       })
       .catch(() => {
-        if (cancelled) return;
-        setLoadError(true);
-        setLoaded(true);
+        if (!cancelled) setResult({ forId, loadError: true, barber: null, branches: [] });
       });
     return () => {
       cancelled = true;
@@ -55,7 +60,8 @@ export default function BarberDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
-  if (!loaded) return null;
+  if (!result || result.forId !== params.id) return null;
+  const { loadError, barber, branches } = result;
   if (loadError) {
     return (
       <main>

@@ -148,7 +148,11 @@ export default function TodaysQueuePage() {
       )
       .subscribe();
 
-    refetchQueue(barberId);
+    // Initial load, queued rather than run inline: refetchQueue sets state, and React's lint rule
+    // forbids setting state synchronously in an effect body. Same timing in practice.
+    queueMicrotask(() => {
+      if (!cancelled) refetchQueue(barberId);
+    });
 
     return () => {
       cancelled = true;
