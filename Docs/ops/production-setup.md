@@ -4,7 +4,7 @@ How the production Supabase project was set up, what lives where, and how to pro
 feature from staging. Design: `Docs/superpowers/specs/2026-09-30-production-setup-design.md`.
 
 Status (2026-10-01): production is **ready, not launched** — every feature through the queue SMS
-slice is live there, live texting is off, and the Owner account is **not yet created** (see step 7).
+slice is live there, live texting is off, and the Owner account exists (step 7).
 
 ## 1. Environments
 
@@ -88,8 +88,18 @@ Production function secrets: `SEND_SMS_HOOK_SECRET`, `ARKESEL_API_KEY`, `ARKESEL
    Enables the `custom_access_token` and `send_sms` hooks (production's own `send-sms` URL and hook
    secret), phone signup with confirmations, `site_url` = the customer app. The note
    "auth.sms.twilio.enabled could not be encoded" also appears on staging and is harmless.
-7. **Owner account — NOT YET DONE.** Run once, in PowerShell from the project folder, with your own
-   email, password and name (single quotes):
+7. **Owner account (done 2026-10-01).** Simplest way, used for production:
+   1. Supabase dashboard → project `pixel-barber-production` → **Authentication → Users → Add user →
+      Create new user**: email + password, tick **Auto Confirm User**.
+   2. Link that login to an Owner row (Supabase MCP `execute_sql` or the SQL editor):
+      ```sql
+      insert into staff_users (auth_user_id, name, email, role, invite_status, invite_accepted_at)
+      select id, '<display name>', email, 'owner', 'accepted', now()
+      from auth.users where lower(email) = '<owner email>';
+      ```
+
+   Alternative (terminal; got stuck once on quoting, so prefer the above) — run once in PowerShell
+   from the project folder, with your own email, password and name (single quotes):
    ```powershell
    Get-Content supabase\.secrets\production.env | ForEach-Object { if ($_ -match '^\s*([^#=]+)=(.*)$') { Set-Item "env:$($matches[1].Trim())" $matches[2].Trim('"') } }
    $env:NEXT_PUBLIC_SUPABASE_URL = "https://yegnbwrmdlhicpzbnldl.supabase.co"
