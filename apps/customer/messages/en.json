@@ -150,7 +150,9 @@
     "upcomingTitle": "Upcoming",
     "noUpcoming": "No upcoming appointments.",
     "bookOne": "Book an appointment",
-    "viewUpcoming": "View my appointments"
+    "viewUpcoming": "View my appointments",
+    "branchLabel": "Branch: {branch}",
+    "notFound": "We couldn't find this appointment."
   },
   "Book": {
     "modeJoinNow": "Join Now",
@@ -158,6 +160,7 @@
     "dateTimeStepTitle": "Date & Time",
     "scheduleReviewTitle": "Review & Book",
     "confirmBook": "Book Appointment",
+    "changeTime": "Change time",
     "title": "Join the Queue",
     "branchStepTitle": "Branch",
     "serviceStepTitle": "Service",

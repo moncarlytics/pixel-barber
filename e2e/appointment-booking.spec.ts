@@ -156,7 +156,8 @@ test('customer books, reschedules and cancels an appointment', async ({
     // --- Upcoming lists it ---
     await page.goto('/tickets');
     const upcoming = main.getByRole('region', { name: 'Upcoming' });
-    const entry = upcoming.getByRole('link', { name: `${tomorrowLabel} 10:00` });
+    const escapedLabel = tomorrowLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const entry = upcoming.getByRole('link', { name: new RegExp(`^${escapedLabel} 10:00`) });
     await expect(entry).toBeVisible({ timeout: 15000 });
     await entry.press('Enter');
     await expect(page).toHaveURL(/\/appointments\/[0-9a-f-]+$/, { timeout: 15000 });

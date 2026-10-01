@@ -224,4 +224,72 @@ describe('activate_due_appointments', () => {
     const { data } = await f.admin.from('appointments').select('*').eq('id', id).single();
     expect(data).toMatchObject({ status: 'cancelled', cancel_reason: 'emergency' });
   });
+
+  it('leaves the appointment scheduled, with no ticket, when no barber is eligible', async () => {
+    // Customer 3's earlier tickets are all finished, so they are free.
+    await f.admin
+      .from('barbers')
+      .update({ status: 'offline' })
+      .in('id', [f.barberA.barberId, f.barberB.barberId]);
+    const id = await dueAppointment(3, f.barberA.barberId);
+    try {
+      await activate();
+      expect(await ticketsFor(id)).toHaveLength(0);
+      const { data } = await f.admin.from('appointments').select('status').eq('id', id).single();
+      expect(data!.status).toBe('scheduled');
+    } finally {
+      await f.admin
+        .from('barbers')
+        .update({ status: 'available' })
+        .in('id', [f.barberA.barberId, f.barberB.barberId]);
+      await f.admin.from('appointments').delete().eq('id', id);
+    }
+  });
+
+  it('cancels a scheduled appointment whose slot has already ended', async () => {
+    const start = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const { data: row, error } = await f.admin
+      .from('appointments')
+      .insert({
+        customer_id: f.customers[3].customerId,
+        branch_id: f.branchId,
+        branch_service_id: f.branchServiceId,
+        preferred_barber_id: f.barberA.barberId,
+        scheduled_start: start.toISOString(),
+        scheduled_end: new Date(start.getTime() + 30 * 60 * 1000).toISOString(),
+        status: 'scheduled',
+        created_by: 'customer',
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    await activate();
+    expect(await ticketsFor(row.id)).toHaveLength(0);
+    const { data } = await f.admin.from('appointments').select('*').eq('id', row.id).single();
+    expect(data).toMatchObject({ status: 'cancelled', cancel_reason: 'other' });
+    expect(data!.cancelled_at).not.toBeNull();
+  });
+
+  it('keeps the appointment scheduled when the existing ticket already carries another one', async () => {
+    // Customer 1's waiting walk-in already carries an appointment (attached in an earlier case).
+    const countEvents = async () => {
+      const { data } = await f.admin
+        .from('queue_events')
+        .select('id')
+        .eq('ticket_id', waitingId)
+        .eq('event_type', 'appointment_attached');
+      return (data ?? []).length;
+    };
+    const before = await countEvents();
+    const id = await dueAppointment(1, f.barberA.barberId);
+    try {
+      await activate();
+      const { data } = await f.admin.from('appointments').select('status').eq('id', id).single();
+      expect(data!.status).toBe('scheduled');
+      expect(await ticketsFor(id)).toHaveLength(0);
+      expect(await countEvents()).toBe(before);
+    } finally {
+      await f.admin.from('appointments').delete().eq('id', id);
+    }
+  });
 });

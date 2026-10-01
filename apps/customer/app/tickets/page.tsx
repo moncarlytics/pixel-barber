@@ -8,7 +8,10 @@ import type { Database } from '@pixel-barber/shared';
 import { formatSlotDate, formatSlotTime } from '../appointments/SlotPicker';
 
 type Ticket = Database['public']['Tables']['queue_tickets']['Row'];
-type Appointment = Database['public']['Tables']['appointments']['Row'];
+type Appointment = Database['public']['Tables']['appointments']['Row'] & {
+  branches: { name: string } | null;
+  branch_services: { services: { name: string } | null } | null;
+};
 
 export default function TicketsPage() {
   const t = useTranslations('Tickets');
@@ -35,11 +38,11 @@ export default function TicketsPage() {
     // RLS limits appointments to the signed-in customer's own.
     supabase
       .from('appointments')
-      .select('*')
+      .select('*, branches(name), branch_services(services(name))')
       .eq('status', 'scheduled')
       .gte('scheduled_start', new Date().toISOString())
       .order('scheduled_start')
-      .then(({ data }) => setUpcoming(data ?? []));
+      .then(({ data }) => setUpcoming((data as unknown as Appointment[] | null) ?? []));
 
     return () => {
       supabase.removeChannel(channel);
@@ -74,6 +77,8 @@ export default function TicketsPage() {
               <li key={a.id}>
                 <Link href={`/appointments/${a.id}`}>
                   {formatSlotDate(a.scheduled_start)} {formatSlotTime(a.scheduled_start)}
+                  {' — '}
+                  {a.branches?.name} {a.branch_services?.services?.name}
                 </Link>
               </li>
             ))}

@@ -311,6 +311,16 @@ export default function BookFlow() {
           <button type="button" disabled={submitting} onClick={handleConfirmBook}>
             {t('confirmBook')}
           </button>
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => {
+              setError(null);
+              setStep('datetime');
+            }}
+          >
+            {t('changeTime')}
+          </button>
         </div>
       )}
     </main>

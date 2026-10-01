@@ -27,6 +27,7 @@ const CHANGE_CUTOFF_MS = 60 * 60 * 1000;
 interface Loaded {
   appointment: Appointment;
   serviceName: string;
+  branchName: string;
   priceGhs: number | null;
   changeable: boolean;
 }
@@ -39,6 +40,7 @@ export default function AppointmentDetailPage() {
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [mode, setMode] = useState<'view' | 'reschedule' | 'cancel'>('view');
   const [newSlot, setNewSlot] = useState<string | null>(null);
@@ -60,8 +62,12 @@ export default function AppointmentDetailPage() {
         .select('*')
         .eq('id', params.id)
         .maybeSingle();
-      if (cancelled || !appointment) return;
-      const [{ data: bs }, { data: price }] = await Promise.all([
+      if (cancelled) return;
+      if (!appointment) {
+        setNotFound(true);
+        return;
+      }
+      const [{ data: bs }, { data: price }, { data: branch }] = await Promise.all([
         supabase
           .from('branch_services')
           .select('services(name)')
@@ -72,11 +78,13 @@ export default function AppointmentDetailPage() {
           .select('price_ghs')
           .eq('branch_service_id', appointment.branch_service_id)
           .maybeSingle(),
+        supabase.from('branches').select('name').eq('id', appointment.branch_id).maybeSingle(),
       ]);
       if (cancelled) return;
       setLoaded({
         appointment,
         serviceName: (bs?.services as unknown as { name: string } | null)?.name ?? '',
+        branchName: branch?.name ?? '',
         priceGhs: price?.price_ghs ?? null,
         // Computed here (not in render) to keep render pure.
         changeable:
@@ -90,8 +98,15 @@ export default function AppointmentDetailPage() {
     };
   }, [supabase, params.id, router, reloadKey]);
 
-  if (!loaded) return null;
-  const { appointment, serviceName, priceGhs, changeable } = loaded;
+  if (!loaded) {
+    return notFound ? (
+      <main>
+        <p>{t('notFound')}</p>
+        <Link href="/tickets">{t('viewUpcoming')}</Link>
+      </main>
+    ) : null;
+  }
+  const { appointment, serviceName, branchName, priceGhs, changeable } = loaded;
 
   function goBack() {
     setMode('view');
@@ -145,6 +160,7 @@ export default function AppointmentDetailPage() {
       {error && <p role="alert">{error}</p>}
       <p>{t('dateLabel', { date: formatSlotDate(appointment.scheduled_start) })}</p>
       <p>{t('timeLabel', { time: formatSlotTime(appointment.scheduled_start) })}</p>
+      <p>{t('branchLabel', { branch: branchName })}</p>
       <p>{t('serviceLabel', { service: serviceName })}</p>
       {priceGhs !== null && <p>{t('priceLabel', { price: priceGhs.toFixed(2) })}</p>}
       <p>{appointment.preferred_barber_id ? t('chosenBarber') : t('anyBarber')}</p>

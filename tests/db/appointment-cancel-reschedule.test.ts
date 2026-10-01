@@ -128,6 +128,14 @@ describe('cancel_appointment', () => {
     expect(error?.message).toBe('too_late');
   });
 
+  it('refuses the system-only branch_closed reason', async () => {
+    const { error } = await f.customers[0].client.rpc('cancel_appointment', {
+      p_appointment_id: apptId,
+      p_reason: 'branch_closed',
+    });
+    expect(error?.message).toBe('not_allowed');
+  });
+
   it("refuses someone else's appointment", async () => {
     const { error } = await f.customers[1].client.rpc('cancel_appointment', {
       p_appointment_id: apptId,
