@@ -132,7 +132,7 @@ test('customer can join the queue end to end through the Book flow UI', async ({
     // Scoped to <main> and pressed with Enter: Next.js dev mode's Dev Tools badge is itself a
     // button (so getByRole('button').first() could pick it) and intercepts pointer clicks.
     const main = page.locator('main');
-    await main.getByRole('button').first().press('Enter'); // the branch's only service
+    await main.getByRole('listitem').getByRole('button').first().press('Enter'); // the branch's only service (the Join Now/Schedule toggle buttons are not list items)
     await main.getByRole('button', { name: /any available/i }).press('Enter');
     await main.getByRole('button', { name: /join now/i }).press('Enter');
 
