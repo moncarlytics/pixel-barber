@@ -14,6 +14,7 @@ export type Database = {
           branch_service_id: string;
           cancel_reason: Database['public']['Enums']['cancel_reason'] | null;
           cancelled_at: string | null;
+          checked_in_at: string | null;
           created_at: string;
           created_by: Database['public']['Enums']['ticket_created_by'];
           created_by_staff_id: string | null;
@@ -31,6 +32,7 @@ export type Database = {
           branch_service_id: string;
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null;
           cancelled_at?: string | null;
+          checked_in_at?: string | null;
           created_at?: string;
           created_by: Database['public']['Enums']['ticket_created_by'];
           created_by_staff_id?: string | null;
@@ -48,6 +50,7 @@ export type Database = {
           branch_service_id?: string;
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null;
           cancelled_at?: string | null;
+          checked_in_at?: string | null;
           created_at?: string;
           created_by?: Database['public']['Enums']['ticket_created_by'];
           created_by_staff_id?: string | null;
@@ -1618,6 +1621,26 @@ export type Database = {
       set_barber_weekly_hours: {
         Args: { p_barber_id: string; p_days: Json };
         Returns: undefined;
+      };
+      staff_book_appointment: {
+        Args: {
+          p_branch_service_id: string;
+          p_barber_id: string | null;
+          p_slot_start: string;
+          p_customer_name: string;
+          p_customer_phone: string | null;
+        };
+        Returns: string;
+      };
+      staff_list_appointment_slots: {
+        Args: {
+          p_branch_service_id: string;
+          p_barber_id: string | null;
+          p_date: string;
+          p_customer_id?: string | null;
+          p_ignore_appointment_id?: string | null;
+        };
+        Returns: string[];
       };
     };
     Enums: {

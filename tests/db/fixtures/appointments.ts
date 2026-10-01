@@ -243,3 +243,43 @@ export async function cleanupAppointmentFixture(f: AppointmentFixture) {
   await admin.from('branches').delete().in('id', branchIds);
   await admin.from('services').delete().eq('id', f.serviceId);
 }
+
+/** A signed-in branch_manager/receptionist assigned to `branchId` (assignment made before sign-in,
+ * so the JWT carries it). */
+export async function createStaffLogin(
+  f: AppointmentFixture,
+  label: string,
+  role: 'branch_manager' | 'receptionist',
+  branchId: string,
+): Promise<{ authUserId: string; staffUserId: string; name: string; client: Client }> {
+  const email = `appt-staff-${label}-${f.suffix}@test.pixelbarber.local`;
+  const name = `Appt Staff ${label}`;
+  const { data: auth, error: authError } = await f.admin.auth.admin.createUser({
+    email,
+    password: PASSWORD,
+    email_confirm: true,
+  });
+  if (authError) throw authError;
+  const { data: staff, error: staffError } = await f.admin
+    .from('staff_users')
+    .insert({ auth_user_id: auth.user.id, name, email, role, invite_status: 'accepted' })
+    .select('id')
+    .single();
+  if (staffError) throw staffError;
+  const { error: assignError } = await f.admin
+    .from('staff_branch_assignments')
+    .insert({ staff_user_id: staff.id, branch_id: branchId });
+  if (assignError) throw assignError;
+  return { authUserId: auth.user.id, staffUserId: staff.id, name, client: await signIn({ email }) };
+}
+
+/** Call after the test's appointments are deleted and BEFORE cleanupAppointmentFixture
+ * (assignments reference the fixture's branches). */
+export async function cleanupStaffLogin(
+  f: AppointmentFixture,
+  login: { authUserId: string; staffUserId: string },
+) {
+  await f.admin.from('staff_branch_assignments').delete().eq('staff_user_id', login.staffUserId);
+  await f.admin.from('staff_users').delete().eq('id', login.staffUserId);
+  await f.admin.auth.admin.deleteUser(login.authUserId);
+}
