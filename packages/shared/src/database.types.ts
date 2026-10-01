@@ -1560,6 +1560,29 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      get_branch_appointment: {
+        Args: { p_appointment_id: string };
+        Returns: {
+          id: string;
+          branch_id: string;
+          branch_name: string;
+          branch_service_id: string;
+          service_name: string;
+          price_ghs: number | null;
+          scheduled_start: string;
+          scheduled_end: string;
+          status: Database['public']['Enums']['appointment_status'];
+          customer_id: string;
+          customer_name: string;
+          customer_phone: string | null;
+          preferred_barber_id: string | null;
+          barber_name: string | null;
+          created_by: Database['public']['Enums']['ticket_created_by'];
+          created_by_staff_name: string | null;
+          checked_in_at: string | null;
+          ticket_id: string | null;
+        }[];
+      };
       list_appointment_slots: {
         Args: {
           p_branch_service_id: string;
@@ -1579,6 +1602,10 @@ export type Database = {
           display_name: string;
         }[];
       };
+      list_branch_appointments: {
+        Args: { p_branch_id: string; p_date: string };
+        Returns: Database['public']['Functions']['get_branch_appointment']['Returns'];
+      };
       list_manageable_barbers: {
         Args: never;
         Returns: {
@@ -1588,6 +1615,15 @@ export type Database = {
           status: Database['public']['Enums']['barber_status'];
           home_branch_id: string;
           home_branch_name: string;
+        }[];
+      };
+      list_my_appointments_today: {
+        Args: never;
+        Returns: {
+          id: string;
+          scheduled_start: string;
+          customer_first_name: string;
+          status: Database['public']['Enums']['appointment_status'];
         }[];
       };
       list_staff_accounts: {
@@ -1631,6 +1667,19 @@ export type Database = {
           p_customer_phone: string | null;
         };
         Returns: string;
+      };
+      staff_cancel_appointment: {
+        Args: {
+          p_appointment_id: string;
+          p_reason: Database['public']['Enums']['cancel_reason'];
+        };
+        Returns: undefined;
+      };
+      staff_check_in_appointment: { Args: { p_appointment_id: string }; Returns: undefined };
+      staff_mark_appointment_no_show: { Args: { p_appointment_id: string }; Returns: undefined };
+      staff_reschedule_appointment: {
+        Args: { p_appointment_id: string; p_slot_start: string };
+        Returns: undefined;
       };
       staff_list_appointment_slots: {
         Args: {
