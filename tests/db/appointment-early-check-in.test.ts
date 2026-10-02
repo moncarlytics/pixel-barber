@@ -221,7 +221,34 @@ describe('check_in_my_appointment', () => {
   });
 });
 
+describe('check_in_my_appointment, earlier bookings', () => {
+  it('does not start an appointment ahead of a customer booked sooner for the same barber', async () => {
+    await appt(1, f.barberB.barberId, 15);
+    const id = await appt(0, f.barberB.barberId, 25);
+    const { data: ticketId, error } = await f.customers[0].client.rpc('check_in_my_appointment', {
+      p_appointment_id: id,
+    });
+    expect(error).toBeNull();
+    expect(ticketId).toBeNull();
+    expect((await appointmentRow(id)).status).toBe('checked_in');
+  });
+});
+
 describe('staff_check_in_appointment', () => {
+  it('refuses when the branch is temporarily closed', async (ctx) => {
+    if (slotCrossesMidnight(20)) {
+      ctx.skip();
+      return;
+    }
+    const id = await appt(0, f.barberB.barberId, 20);
+    await f.admin.from('branches').update({ is_temporarily_closed: true }).eq('id', f.branchId);
+    const { error } = await reception.client.rpc('staff_check_in_appointment', {
+      p_appointment_id: id,
+    });
+    expect(error?.message).toBe('branch_closed');
+    expect((await appointmentRow(id)).status).toBe('scheduled');
+  });
+
   it('starts the appointment now when the barber is free', async (ctx) => {
     if (slotCrossesMidnight(20)) {
       ctx.skip();

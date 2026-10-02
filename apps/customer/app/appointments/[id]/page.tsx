@@ -24,6 +24,7 @@ const REASONS: { value: CancelReason; labelKey: string }[] = [
 ];
 const CHANGE_CUTOFF_MS = 60 * 60 * 1000;
 const ARRIVE_WINDOW_MS = 30 * 60 * 1000;
+const MAX_ARRIVE_TIMER_MS = 12 * 60 * 60 * 1000;
 
 interface Loaded {
   appointment: Appointment;
@@ -109,6 +110,20 @@ export default function AppointmentDetailPage() {
       cancelled = true;
     };
   }, [supabase, params.id, router, reloadKey]);
+
+  // The "I've arrived" button only shows when the page was loaded inside the window, so when the
+  // window opens later, reload at its start (skipped when it is more than 12 hours away).
+  const arriveWindowStart =
+    loaded && loaded.appointment.status === 'scheduled' && !loaded.canArrive
+      ? new Date(loaded.appointment.scheduled_start).getTime() - ARRIVE_WINDOW_MS
+      : null;
+  useEffect(() => {
+    if (arriveWindowStart === null) return;
+    const delay = arriveWindowStart - Date.now();
+    if (delay <= 0 || delay > MAX_ARRIVE_TIMER_MS) return;
+    const timer = setTimeout(() => setReloadKey((n) => n + 1), delay);
+    return () => clearTimeout(timer);
+  }, [arriveWindowStart, reloadKey]);
 
   if (!loaded) {
     return notFound ? (

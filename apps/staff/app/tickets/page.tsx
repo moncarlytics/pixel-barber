@@ -34,8 +34,19 @@ export default function StaffTicketsPage() {
   useEffect(() => {
     if (!selectedBranchId) return;
     let cancelled = false;
+    // Only the latest request's result is applied; an older, slower response must not win.
+    let requestKey = 0;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // Realtime bursts (the every-minute estimate refresh updates every waiting ticket) coalesce
+    // into one refetch.
+    function scheduleRefresh() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(refresh, 400);
+    }
 
     function refresh() {
+      const key = ++requestKey;
       supabase
         .from('queue_tickets')
         .select('*')
@@ -43,10 +54,10 @@ export default function StaffTicketsPage() {
         .not('state', 'in', '(completed,cancelled,no_show)')
         .order('position', { ascending: true, nullsFirst: false })
         .then(({ data }) => {
-          if (!cancelled) setTickets(data ?? []);
+          if (!cancelled && key === requestKey) setTickets(data ?? []);
         });
       supabase.rpc('list_bookable_barbers', { p_branch_id: selectedBranchId }).then(({ data }) => {
-        if (!cancelled) setBarbers(data ?? []);
+        if (!cancelled && key === requestKey) setBarbers(data ?? []);
       });
     }
 
@@ -60,7 +71,7 @@ export default function StaffTicketsPage() {
           table: 'queue_tickets',
           filter: `branch_id=eq.${selectedBranchId}`,
         },
-        refresh,
+        scheduleRefresh,
       )
       .on(
         'postgres_changes',
@@ -70,7 +81,7 @@ export default function StaffTicketsPage() {
           table: 'barbers',
           filter: `home_branch_id=eq.${selectedBranchId}`,
         },
-        refresh,
+        scheduleRefresh,
       )
       .subscribe();
 
@@ -78,6 +89,7 @@ export default function StaffTicketsPage() {
 
     return () => {
       cancelled = true;
+      clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [selectedBranchId]);
@@ -154,7 +166,9 @@ export default function StaffTicketsPage() {
               <td>{ticket.assigned_barber_id ?? '—'}</td>
               <td>
                 {ticket.estimated_wait_low_min !== null
-                  ? `${ticket.estimated_wait_low_min}–${ticket.estimated_wait_high_min} min`
+                  ? ticket.estimated_wait_low_min === ticket.estimated_wait_high_min
+                    ? `${ticket.estimated_wait_low_min} min`
+                    : `${ticket.estimated_wait_low_min}–${ticket.estimated_wait_high_min} min`
                   : '—'}
               </td>
               <td>{ticket.state === 'grace_period' ? t('gracePeriodAlert') : ticket.state}</td>

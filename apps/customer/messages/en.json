@@ -198,6 +198,7 @@
     "positionLabel": "Position in queue: {position}",
     "aheadLabel": "Customers ahead of you: {count}",
     "waitEstimateLabel": "Estimated wait: {low}–{high} min",
+    "waitEstimateExact": "Estimated wait: {low} min",
     "confidenceHigh": "High confidence",
     "confidenceModerate": "Moderate confidence",
     "confidenceVariable": "Variable conditions",

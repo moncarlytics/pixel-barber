@@ -8,7 +8,7 @@
 // this migration existed).
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, updateTicketWithVersion } from '@pixel-barber/shared';
@@ -80,7 +80,11 @@ export default function TodaysQueuePage() {
     };
   }, []);
 
+  // Latest request wins: an older, slower response must not overwrite a newer one.
+  const queueRequestKey = useRef(0);
+
   async function refetchQueue(barberId: string) {
+    const key = ++queueRequestKey.current;
     const [{ data: next, error: nextError }, { data: current, error: currentError }] =
       await Promise.all([
         supabase
@@ -105,6 +109,7 @@ export default function TodaysQueuePage() {
     // from the legitimate empty-queue state -- this task's whole premise is that the RLS fix might
     // silently return zero rows, so the read path gets the same error visibility the write paths
     // (handleAcknowledge, confirmNotPresent, handleSkip, handleMarkComplete) already have.
+    if (key !== queueRequestKey.current) return;
     if (nextError || currentError) {
       setError(t('actionFailed'));
     }
@@ -119,6 +124,7 @@ export default function TodaysQueuePage() {
     if (!myBarber) return;
     const barberId = myBarber.id;
     let cancelled = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     const channel = supabase
       .channel(`barber-queue-${barberId}`)
@@ -131,7 +137,11 @@ export default function TodaysQueuePage() {
           filter: `assigned_barber_id=eq.${barberId}`,
         },
         () => {
-          if (!cancelled) refetchQueue(barberId);
+          // Coalesce bursts (the every-minute estimate refresh) into one refetch.
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            if (!cancelled) refetchQueue(barberId);
+          }, 400);
         },
       )
       .on(
@@ -157,6 +167,7 @@ export default function TodaysQueuePage() {
 
     return () => {
       cancelled = true;
+      clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [myBarber?.id]);

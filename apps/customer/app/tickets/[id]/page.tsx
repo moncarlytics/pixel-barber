@@ -136,10 +136,12 @@ export default function TicketTrackingPage() {
           </p>
           {ticket.estimated_wait_low_min !== null && ticket.estimated_wait_high_min !== null && (
             <p>
-              {t('waitEstimateLabel', {
-                low: ticket.estimated_wait_low_min,
-                high: ticket.estimated_wait_high_min,
-              })}
+              {ticket.estimated_wait_low_min === ticket.estimated_wait_high_min
+                ? t('waitEstimateExact', { low: ticket.estimated_wait_low_min })
+                : t('waitEstimateLabel', {
+                    low: ticket.estimated_wait_low_min,
+                    high: ticket.estimated_wait_high_min,
+                  })}
             </p>
           )}
           <p>
