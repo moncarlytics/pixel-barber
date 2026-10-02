@@ -23,6 +23,7 @@ export default function Home() {
       <Link href="/settings/services">Services & Pricing</Link>
       <Link href="/settings/barbers">{t('barbersLink')}</Link>
       <Link href="/settings/staff">{t('staffLink')}</Link>
+      <Link href="/appointments">{t('appointmentsLink')}</Link>
     </main>
   );
 }

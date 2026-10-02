@@ -3,7 +3,8 @@
     "title": "Pixel Barber — Staff Portal",
     "logIn": "Log in",
     "barbersLink": "Barbers",
-    "staffLink": "Staff & Roles"
+    "staffLink": "Staff & Roles",
+    "appointmentsLink": "Appointments"
   },
   "Header": {
     "logOut": "Log out"
@@ -251,5 +252,75 @@
     "cancelButton": "Cancel",
     "conflictMessage": "This ticket was just updated by someone else — showing the latest state.",
     "actionFailed": "Something went wrong. Please try again."
+  },
+  "StaffAppointments": {
+    "title": "Appointments",
+    "branch": "Branch",
+    "barberFilter": "Barber",
+    "allBarbers": "All barbers",
+    "anyBarber": "Any barber",
+    "previousDay": "Previous day",
+    "today": "Today",
+    "nextDay": "Next day",
+    "bookForCustomer": "Book for a customer",
+    "empty": "No appointments on this day.",
+    "loadFailed": "Couldn't load appointments.",
+    "statuses": {
+      "scheduled": "Booked",
+      "checked_in": "Checked in",
+      "converted": "In the queue",
+      "completed": "Done",
+      "cancelled": "Cancelled",
+      "no_show": "No-show"
+    },
+    "detailTitle": "Appointment",
+    "dateLabel": "Date: {date}",
+    "timeLabel": "Time: {time}",
+    "branchLabel": "Branch: {branch}",
+    "serviceLabel": "Service: {service}",
+    "priceLabel": "Price: GHS {price}",
+    "barberLabel": "Barber: {barber}",
+    "customerLabel": "Customer: {name}",
+    "phoneLabel": "Phone: {phone}",
+    "noPhone": "Phone: none",
+    "statusLabel": "Status: {status}",
+    "bookedByCustomer": "Booked by the customer",
+    "bookedByStaff": "Booked by {name}",
+    "checkIn": "Check in",
+    "reschedule": "Reschedule",
+    "confirmReschedule": "Move to this time",
+    "cancel": "Cancel appointment",
+    "cancelTitle": "Why is it being cancelled?",
+    "confirmCancel": "Confirm cancellation",
+    "markNoShow": "Mark no-show",
+    "back": "Back",
+    "inQueue": "Now in the queue.",
+    "openLiveQueue": "Open the Live Queue",
+    "backToCalendar": "Back to appointments",
+    "notFound": "We couldn't find this appointment.",
+    "pickDate": "Pick a day",
+    "loadingSlots": "Loading times…",
+    "noSlots": "No open times on this day.",
+    "reasons": {
+      "wait_too_long": "Wait too long",
+      "cant_make_it": "Can't make it",
+      "changed_plans": "Changed plans",
+      "found_another_barber": "Found another barber",
+      "emergency": "Emergency",
+      "other": "Other"
+    },
+    "errors": {
+      "slotTaken": "That time was just taken — please pick another.",
+      "alreadyBookedThatDay": "This customer already has an appointment that day.",
+      "branchClosed": "This branch is closed then.",
+      "tooSoon": "That time has already started.",
+      "tooFarAhead": "That's too far ahead (up to 14 days).",
+      "tooLate": "This appointment can no longer be changed.",
+      "notAllowed": "You can't manage appointments for this branch.",
+      "alreadyConverted": "This appointment is already in the queue.",
+      "invalidPhone": "Enter a valid 10-digit Ghana phone number.",
+      "notFound": "We couldn't find this appointment.",
+      "generic": "Something went wrong — please try again."
+    }
   }
 }
