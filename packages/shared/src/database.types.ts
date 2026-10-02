@@ -1481,6 +1481,7 @@ export type Database = {
     };
     Functions: {
       activate_due_appointments: { Args: never; Returns: number };
+      appointments_minute_tick: { Args: never; Returns: undefined };
       auth_branch_ids: { Args: never; Returns: string[] };
       auth_role: { Args: never; Returns: string };
       auth_staff_id: { Args: never; Returns: string };
@@ -1512,6 +1513,7 @@ export type Database = {
         }[];
       };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };
+      enqueue_appointment_reminders: { Args: { p_now?: string }; Returns: number };
       fill_barber_schedule: {
         Args: { p_barber_id?: string | null };
         Returns: undefined;
