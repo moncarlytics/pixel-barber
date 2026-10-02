@@ -217,7 +217,7 @@ test('receptionist books, checks in, reschedules and cancels; barber sees today 
     await main.getByLabel('Branch', { exact: true }).selectOption(branch!.id);
     if (!todayWorks) await main.getByRole('button', { name: 'Next day' }).press('Enter');
     await expect(
-      main.getByRole('link', { name: new RegExp(`${walkerTime} � Staff E2E Walker`) }),
+      main.getByRole('link', { name: new RegExp(`${walkerTime} — Staff E2E Walker`) }),
     ).toBeVisible({ timeout: 15000 });
 
     // --- 5. Second booking, reschedule, cancel ---
