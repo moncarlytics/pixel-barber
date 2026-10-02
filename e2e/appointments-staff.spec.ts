@@ -247,24 +247,68 @@ test('receptionist books, checks in, reschedules and cancels; barber sees today 
     expect(second).toMatchObject({ status: 'cancelled', cancel_reason: 'cant_make_it' });
   } finally {
     await barberContext?.close();
+    // FK-safe cleanup scoped to this test's rows; every failure is collected and thrown at the end.
+    const failures: string[] = [];
+    const check = (label: string, res: { error: { message: string } | null }) => {
+      if (res.error) failures.push(`${label}: ${res.error.message}`);
+    };
+    const { data: tickets } = await admin
+      .from('queue_tickets')
+      .select('id')
+      .eq('branch_id', branch!.id);
+    const ticketIds = (tickets ?? []).map((r) => r.id);
+    const { data: appts } = await admin
+      .from('appointments')
+      .select('id')
+      .eq('branch_id', branch!.id);
+    const apptIds = (appts ?? []).map((r) => r.id);
     const { data: leftover } = await admin
       .from('customers')
       .select('id')
       .in('name', ['Staff E2E Walker', 'Staff E2E Second', 'Todayguy Staffe2e']);
     const ids = [...new Set([...customerIds, ...(leftover ?? []).map((c) => c.id)])];
-    await admin.from('appointments').delete().eq('branch_id', branch!.id);
-    if (ids.length) await admin.from('customers').delete().in('id', ids);
-    await admin.from('customers').delete().eq('phone_e164', phoneE164);
-    await admin.from('barber_schedule').delete().eq('barber_id', barber!.id);
-    await admin.from('barber_skills').delete().eq('barber_id', barber!.id);
-    await admin.from('staff_branch_assignments').delete().eq('staff_user_id', recepStaff!.id);
-    await admin.from('staff_users').delete().eq('id', recepStaff!.id);
-    await admin.from('staff_users').delete().eq('id', barberStaff!.id);
-    await admin.auth.admin.deleteUser(recepAuth!.user.id);
-    await admin.auth.admin.deleteUser(barberAuth!.user.id);
-    await admin.from('branch_services').delete().eq('id', bs!.id);
-    await admin.from('branch_hours').delete().eq('branch_id', branch!.id);
-    await admin.from('branches').delete().eq('id', branch!.id);
-    await admin.from('services').delete().eq('id', service!.id);
+
+    if (ticketIds.length) {
+      check('queue_events', await admin.from('queue_events').delete().in('ticket_id', ticketIds));
+      check(
+        'notifications(ticket)',
+        await admin.from('notifications').delete().in('related_ticket_id', ticketIds),
+      );
+    }
+    if (apptIds.length) {
+      check(
+        'notifications(appointment)',
+        await admin.from('notifications').delete().in('related_appointment_id', apptIds),
+      );
+    }
+    check('queue_tickets', await admin.from('queue_tickets').delete().eq('branch_id', branch!.id));
+    check('appointments', await admin.from('appointments').delete().eq('branch_id', branch!.id));
+    check(
+      'branch_ticket_counters',
+      await admin.from('branch_ticket_counters').delete().eq('branch_id', branch!.id),
+    );
+    check(
+      'barber_schedule',
+      await admin.from('barber_schedule').delete().eq('barber_id', barber!.id),
+    );
+    check('barber_skills', await admin.from('barber_skills').delete().eq('barber_id', barber!.id));
+    check(
+      'staff_branch_assignments',
+      await admin.from('staff_branch_assignments').delete().eq('staff_user_id', recepStaff!.id),
+    );
+    check('staff_users(recep)', await admin.from('staff_users').delete().eq('id', recepStaff!.id));
+    check(
+      'staff_users(barber)',
+      await admin.from('staff_users').delete().eq('id', barberStaff!.id),
+    );
+    check('auth(recep)', await admin.auth.admin.deleteUser(recepAuth!.user.id));
+    check('auth(barber)', await admin.auth.admin.deleteUser(barberAuth!.user.id));
+    if (ids.length) check('customers', await admin.from('customers').delete().in('id', ids));
+    check('customers(phone)', await admin.from('customers').delete().eq('phone_e164', phoneE164));
+    check('branch_services', await admin.from('branch_services').delete().eq('id', bs!.id));
+    check('branch_hours', await admin.from('branch_hours').delete().eq('branch_id', branch!.id));
+    check('branches', await admin.from('branches').delete().eq('id', branch!.id));
+    check('services', await admin.from('services').delete().eq('id', service!.id));
+    if (failures.length) throw new Error(`e2e cleanup failed:\n${failures.join('\n')}`);
   }
 });
