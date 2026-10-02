@@ -122,32 +122,44 @@ describe('actions', () => {
       ctx.skip();
       return;
     }
-    const todayId = await insertScheduled(3, null, start);
-    expect(
-      (await reception.client.rpc('staff_check_in_appointment', { p_appointment_id: todayId }))
-        .error,
-    ).toBeNull();
-    const { data: after } = await f.admin
-      .from('appointments')
-      .select('*')
-      .eq('id', todayId)
-      .single();
-    expect(after).toMatchObject({ status: 'checked_in' });
-    expect(after!.checked_in_at).not.toBeNull();
-    const again = await reception.client.rpc('staff_check_in_appointment', {
-      p_appointment_id: todayId,
-    });
-    expect(again.error?.message).toBe('too_late');
+    // Both barbers busy, so Check in only marks arrival (a free barber would start it at once).
+    const barberIds = [f.barberA.barberId, f.barberB.barberId];
+    await f.admin.from('barbers').update({ status: 'busy' }).in('id', barberIds);
+    try {
+      const todayId = await insertScheduled(3, null, start);
+      expect(
+        (await reception.client.rpc('staff_check_in_appointment', { p_appointment_id: todayId }))
+          .error,
+      ).toBeNull();
+      const { data: after } = await f.admin
+        .from('appointments')
+        .select('*')
+        .eq('id', todayId)
+        .single();
+      expect(after).toMatchObject({ status: 'checked_in' });
+      expect(after!.checked_in_at).not.toBeNull();
+      expect(after!.check_in_method).toBe('staff');
+      const again = await reception.client.rpc('staff_check_in_appointment', {
+        p_appointment_id: todayId,
+      });
+      expect(again.error?.message).toBe('too_late');
 
-    const moved = await reception.client.rpc('staff_reschedule_appointment', {
-      p_appointment_id: todayId,
-      p_slot_start: slotAt(2, '15:00'),
-    });
-    expect(moved.error).toBeNull();
-    const { data: row } = await f.admin.from('appointments').select('*').eq('id', todayId).single();
-    expect(new Date(row!.scheduled_start).toISOString()).toBe(slotAt(2, '15:00'));
-    expect(row!.status).toBe('scheduled');
-    expect(row!.checked_in_at).toBeNull();
+      const moved = await reception.client.rpc('staff_reschedule_appointment', {
+        p_appointment_id: todayId,
+        p_slot_start: slotAt(2, '15:00'),
+      });
+      expect(moved.error).toBeNull();
+      const { data: row } = await f.admin
+        .from('appointments')
+        .select('*')
+        .eq('id', todayId)
+        .single();
+      expect(new Date(row!.scheduled_start).toISOString()).toBe(slotAt(2, '15:00'));
+      expect(row!.status).toBe('scheduled');
+      expect(row!.checked_in_at).toBeNull();
+    } finally {
+      await f.admin.from('barbers').update({ status: 'available' }).in('id', barberIds);
+    }
   });
 
   it('reschedules a scheduled appointment without changing its status', async () => {

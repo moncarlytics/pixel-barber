@@ -14,6 +14,7 @@ export type Database = {
           branch_service_id: string;
           cancel_reason: Database['public']['Enums']['cancel_reason'] | null;
           cancelled_at: string | null;
+          check_in_method: Database['public']['Enums']['check_in_method'] | null;
           checked_in_at: string | null;
           created_at: string;
           created_by: Database['public']['Enums']['ticket_created_by'];
@@ -32,6 +33,7 @@ export type Database = {
           branch_service_id: string;
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null;
           cancelled_at?: string | null;
+          check_in_method?: Database['public']['Enums']['check_in_method'] | null;
           checked_in_at?: string | null;
           created_at?: string;
           created_by: Database['public']['Enums']['ticket_created_by'];
@@ -50,6 +52,7 @@ export type Database = {
           branch_service_id?: string;
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null;
           cancelled_at?: string | null;
+          check_in_method?: Database['public']['Enums']['check_in_method'] | null;
           checked_in_at?: string | null;
           created_at?: string;
           created_by?: Database['public']['Enums']['ticket_created_by'];
@@ -1690,7 +1693,8 @@ export type Database = {
         };
         Returns: undefined;
       };
-      staff_check_in_appointment: { Args: { p_appointment_id: string }; Returns: undefined };
+      check_in_my_appointment: { Args: { p_appointment_id: string }; Returns: string | null };
+      staff_check_in_appointment: { Args: { p_appointment_id: string }; Returns: string | null };
       staff_mark_appointment_no_show: { Args: { p_appointment_id: string }; Returns: undefined };
       staff_reschedule_appointment: {
         Args: { p_appointment_id: string; p_slot_start: string };
