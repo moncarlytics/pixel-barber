@@ -6,6 +6,8 @@ export type StaffAppointmentErrorKey =
   | 'tooSoon'
   | 'tooFarAhead'
   | 'tooLate'
+  | 'notToday'
+  | 'notStarted'
   | 'notAllowed'
   | 'alreadyConverted'
   | 'invalidPhone'
@@ -19,6 +21,8 @@ const KEYS = new Map<string, StaffAppointmentErrorKey>([
   ['too_soon', 'tooSoon'],
   ['too_far_ahead', 'tooFarAhead'],
   ['too_late', 'tooLate'],
+  ['not_today', 'notToday'],
+  ['not_started', 'notStarted'],
   ['not_allowed', 'notAllowed'],
   ['already_converted', 'alreadyConverted'],
   ['invalid_phone', 'invalidPhone'],

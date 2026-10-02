@@ -36,7 +36,7 @@ interface Appointment {
 
 type Mode = 'view' | 'reschedule' | 'cancel';
 type Loaded =
-  | { key: string; kind: 'ok'; row: Appointment; startsInFuture: boolean }
+  | { key: string; kind: 'ok'; row: Appointment; startsInFuture: boolean; isToday: boolean }
   | { key: string; kind: 'empty' }
   | { key: string; kind: 'error'; message: string | undefined };
 
@@ -74,6 +74,7 @@ export default function StaffAppointmentPage() {
           kind: 'ok',
           row,
           startsInFuture: Date.parse(row.scheduled_start) > Date.now(),
+          isToday: row.scheduled_start.slice(0, 10) === new Date().toISOString().slice(0, 10),
         });
       });
     return () => {
@@ -101,6 +102,8 @@ export default function StaffAppointmentPage() {
         setPickedSlot(null);
         setRefreshKey((k) => k + 1);
       }
+      // Re-read the appointment so a change made elsewhere (e.g. cron conversion) shows at once.
+      setReloadKey((k) => k + 1);
       return;
     }
     resetMode();
@@ -136,7 +139,7 @@ export default function StaffAppointmentPage() {
     );
   }
 
-  const { row, startsInFuture } = current;
+  const { row, startsInFuture, isToday } = current;
   const actionable = row.status === 'scheduled' || row.status === 'checked_in';
 
   return (
@@ -166,7 +169,7 @@ export default function StaffAppointmentPage() {
 
       {actionable && mode === 'view' && (
         <div>
-          {row.status === 'scheduled' && (
+          {row.status === 'scheduled' && isToday && (
             <button
               type="button"
               disabled={busy}

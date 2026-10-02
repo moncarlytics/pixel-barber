@@ -39,6 +39,8 @@ export default function AppointmentsCalendarPage() {
   const [barberFilter, setBarberFilter] = useState('all');
   const [result, setResult] = useState<{ key: string; rows: Row[]; failed: boolean } | null>(null);
   const [branchesFailed, setBranchesFailed] = useState(false);
+  const [branchesLoaded, setBranchesLoaded] = useState(false);
+  const [barbersFailed, setBarbersFailed] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +48,7 @@ export default function AppointmentsCalendarPage() {
       .then((list) => {
         if (cancelled) return;
         setBranches(list);
+        setBranchesLoaded(true);
         setBranchId((prev) => prev ?? list[0]?.id ?? null);
       })
       .catch(() => {
@@ -59,8 +62,13 @@ export default function AppointmentsCalendarPage() {
   useEffect(() => {
     if (!branchId) return;
     let cancelled = false;
-    supabase.rpc('list_bookable_barbers', { p_branch_id: branchId }).then(({ data }) => {
+    supabase.rpc('list_bookable_barbers', { p_branch_id: branchId }).then(({ data, error }) => {
       if (cancelled) return;
+      if (error) {
+        setBarbersFailed(branchId);
+        return;
+      }
+      setBarbersFailed((prev) => (prev === branchId ? null : prev));
       setBarbersResult({
         key: branchId,
         barbers: (data ?? []).map((b) => ({ id: b.id, display_name: b.display_name })),
@@ -142,7 +150,10 @@ export default function AppointmentsCalendarPage() {
       {branchId && (
         <Link href={`/appointments/new?branch=${branchId}`}>{t('bookForCustomer')}</Link>
       )}
-      {(current?.failed || branchesFailed) && <p role="alert">{t('loadFailed')}</p>}
+      {branchesLoaded && branches.length === 0 && <p>{t('noBranches')}</p>}
+      {(current?.failed || branchesFailed || barbersFailed === branchId) && (
+        <p role="alert">{t('loadFailed')}</p>
+      )}
       {current && !current.failed && rows.length === 0 && <p>{t('empty')}</p>}
       {rows.length > 0 && (
         <ul>

@@ -19,12 +19,17 @@ export default function TodaysAppointments() {
 
   useEffect(() => {
     let cancelled = false;
-    supabase.rpc('list_my_appointments_today').then(({ data, error }) => {
-      if (cancelled || error) return;
-      setRows((data ?? []) as Row[]);
-    });
+    function load() {
+      supabase.rpc('list_my_appointments_today').then(({ data, error }) => {
+        if (cancelled || error) return;
+        setRows((data ?? []) as Row[]);
+      });
+    }
+    load();
+    const timer = setInterval(load, 60_000);
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, [supabase]);
 

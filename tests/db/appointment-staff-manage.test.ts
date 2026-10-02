@@ -103,23 +103,53 @@ describe('reading', () => {
 });
 
 describe('actions', () => {
-  it('checks in, then reschedules a checked-in appointment', async () => {
+  it('refuses check-in for an appointment on a future day', async () => {
+    const early = await reception.client.rpc('staff_check_in_appointment', {
+      p_appointment_id: apptId,
+    });
+    expect(early.error?.message).toBe('not_today');
+    const { data } = await f.admin.from('appointments').select('status').eq('id', apptId).single();
+    expect(data!.status).toBe('scheduled');
+  });
+
+  it("checks in today's appointment, and rescheduling returns it to scheduled", async (ctx) => {
+    // Next 30-minute grid slot at least 60 minutes out, still on today's UTC date (the cron will
+    // not convert a future appointment mid-test).
+    const slotMs = 30 * 60_000;
+    const start = new Date(Math.ceil((Date.now() + 60 * 60_000) / slotMs) * slotMs);
+    if (start.toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10)) {
+      ctx.skip();
+      return;
+    }
+    const todayId = await insertScheduled(3, null, start);
     expect(
-      (await reception.client.rpc('staff_check_in_appointment', { p_appointment_id: apptId }))
+      (await reception.client.rpc('staff_check_in_appointment', { p_appointment_id: todayId }))
         .error,
     ).toBeNull();
     const { data: after } = await f.admin
       .from('appointments')
       .select('*')
-      .eq('id', apptId)
+      .eq('id', todayId)
       .single();
     expect(after).toMatchObject({ status: 'checked_in' });
     expect(after!.checked_in_at).not.toBeNull();
     const again = await reception.client.rpc('staff_check_in_appointment', {
-      p_appointment_id: apptId,
+      p_appointment_id: todayId,
     });
     expect(again.error?.message).toBe('too_late');
 
+    const moved = await reception.client.rpc('staff_reschedule_appointment', {
+      p_appointment_id: todayId,
+      p_slot_start: slotAt(2, '15:00'),
+    });
+    expect(moved.error).toBeNull();
+    const { data: row } = await f.admin.from('appointments').select('*').eq('id', todayId).single();
+    expect(new Date(row!.scheduled_start).toISOString()).toBe(slotAt(2, '15:00'));
+    expect(row!.status).toBe('scheduled');
+    expect(row!.checked_in_at).toBeNull();
+  });
+
+  it('reschedules a scheduled appointment without changing its status', async () => {
     const moved = await reception.client.rpc('staff_reschedule_appointment', {
       p_appointment_id: apptId,
       p_slot_start: slotAt(2, '14:00'),
@@ -127,7 +157,7 @@ describe('actions', () => {
     expect(moved.error).toBeNull();
     const { data: row } = await f.admin.from('appointments').select('*').eq('id', apptId).single();
     expect(new Date(row!.scheduled_start).toISOString()).toBe(slotAt(2, '14:00'));
-    expect(row!.status).toBe('checked_in');
+    expect(row!.status).toBe('scheduled');
   });
 
   it('refuses no-show before the start, allows it after', async () => {
@@ -139,7 +169,7 @@ describe('actions', () => {
       const early = await reception.client.rpc('staff_mark_appointment_no_show', {
         p_appointment_id: apptId,
       });
-      expect(early.error?.message).toBe('too_late');
+      expect(early.error?.message).toBe('not_started');
       const pastId = await pastAppointment(1, null);
       expect(
         (await reception.client.rpc('staff_mark_appointment_no_show', { p_appointment_id: pastId }))

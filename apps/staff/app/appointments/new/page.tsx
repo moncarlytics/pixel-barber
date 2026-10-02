@@ -28,7 +28,8 @@ function NewAppointmentForm() {
   const [name, setName] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [phone, setPhone] = useState<string | null>(null);
-  const [services, setServices] = useState<ServiceOption[]>([]);
+  const [services, setServices] = useState<ServiceOption[] | null>(null);
+  const [servicesFailed, setServicesFailed] = useState(false);
   const [barbers, setBarbers] = useState<BarberOption[]>([]);
   const [service, setService] = useState<ServiceOption | null>(null);
   const [barber, setBarber] = useState<BarberOption | null>(null);
@@ -45,8 +46,12 @@ function NewAppointmentForm() {
       .select('id, services(name)')
       .eq('branch_id', branch)
       .eq('is_active', true)
-      .then(({ data }) => {
+      .then(({ data, error: loadError }) => {
         if (cancelled) return;
+        if (loadError) {
+          setServicesFailed(true);
+          return;
+        }
         setServices(
           (data ?? []).map((r) => {
             const svc = r.services as { name: string } | { name: string }[] | null;
@@ -149,8 +154,10 @@ function NewAppointmentForm() {
       {step === 'service' && (
         <div>
           <p>{t('service')}</p>
+          {servicesFailed && <p role="alert">{t('errors.generic')}</p>}
+          {services && services.length === 0 && <p>{t('noServices')}</p>}
           <ul>
-            {services.map((s) => (
+            {(services ?? []).map((s) => (
               <li key={s.id}>
                 <button
                   type="button"
@@ -215,6 +222,7 @@ function NewAppointmentForm() {
           <p>{t('barberLabel', { barber: barber?.display_name ?? t('anyBarber') })}</p>
           <p>{`${formatSlotDate(slot)} ${formatSlotTime(slot)}`}</p>
           <p>{t('customerLabel', { name })}</p>
+          {phone && <p>{t('existingCustomerNote')}</p>}
           <p>{phone ? t('phoneLabel', { phone }) : t('noPhone')}</p>
           <button
             type="button"
