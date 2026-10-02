@@ -1,5 +1,6 @@
 // supabase/functions/send-notifications/index.ts
-// Queue SMS sender (Docs/superpowers/specs/2026-09-25-queue-sms-notifications-design.md). Called
+// Queue and appointment-reminder SMS sender (Docs/superpowers/specs/2026-09-25-queue-sms-notifications-design.md;
+// reminders: Docs/superpowers/specs/2026-10-02-appointments-reminders-checkin-wait-design.md). Called
 // every 30 seconds by the send-notifications pg_cron job (and by tests) with the service role key;
 // never by the apps. Claims pending SMS notifications, decides each (stale / expired / opted out /
 // no phone / live sending off), texts the rest through Arkesel, and records sent or failed.
@@ -123,7 +124,8 @@ Deno.serve(async (req) => {
     const message = buildNotificationSms(n.notification_type as SmsNotificationType, {
       branchName: n.branch_name ?? 'Pixel Barber',
       ticketNumber: n.ticket_number ?? '',
-      link: ticketLink(customerAppUrl, n.ticket_id!),
+      link: n.ticket_id ? ticketLink(customerAppUrl, n.ticket_id) : '',
+      slot: n.appointment_slot ?? undefined,
     });
     const result = await sendArkeselSms(n.phone_e164!, message, arkesel);
 

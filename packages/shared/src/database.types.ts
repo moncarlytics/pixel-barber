@@ -1510,6 +1510,10 @@ export type Database = {
           ticket_state: Database['public']['Enums']['ticket_state'] | null;
           ticket_number: string | null;
           branch_name: string | null;
+          appointment_id: string | null;
+          appointment_status: Database['public']['Enums']['appointment_status'] | null;
+          appointment_slot: string | null;
+          payload_slot: string | null;
         }[];
       };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };

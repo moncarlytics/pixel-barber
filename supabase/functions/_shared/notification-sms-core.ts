@@ -16,7 +16,19 @@ const SENDABLE_TICKET_STATES: Record<string, ReadonlySet<string>> = {
   // Released as a no-show and not since rejoined/changed.
   ticket_released: new Set(['no_show']),
 };
-export const SMS_NOTIFICATION_TYPES = ['youre_next', 'your_turn', 'ticket_released'] as const;
+/** Appointment statuses in which a reminder still makes sense. */
+const SENDABLE_APPOINTMENT_STATES: ReadonlySet<string> = new Set(['scheduled', 'checked_in']);
+const REMINDER_TYPES: ReadonlySet<string> = new Set([
+  'appointment_reminder_day',
+  'appointment_reminder_hour',
+]);
+export const SMS_NOTIFICATION_TYPES = [
+  'youre_next',
+  'your_turn',
+  'ticket_released',
+  'appointment_reminder_day',
+  'appointment_reminder_hour',
+] as const;
 export type SmsNotificationType = (typeof SMS_NOTIFICATION_TYPES)[number];
 export const DISPATCH_BATCH_SIZE = 50;
 export const MAX_DISPATCH_ATTEMPTS = 3;
@@ -41,6 +53,25 @@ export interface ClaimedNotification {
   ticket_state: string | null;
   ticket_number: string | null;
   branch_name: string | null;
+  /** Reminder rows only: the appointment, its current status and slot, and the slot the reminder
+   * was queued for (payload->>'slot'). */
+  appointment_id?: string | null;
+  appointment_status?: string | null;
+  appointment_slot?: string | null;
+  payload_slot?: string | null;
+}
+
+/** A ticket notification whose ticket has moved on, or a reminder whose appointment is no longer
+ * booked or has moved to another slot. */
+function isStale(n: ClaimedNotification): boolean {
+  if (REMINDER_TYPES.has(n.notification_type)) {
+    if (!n.appointment_id || !n.appointment_status) return true;
+    if (!SENDABLE_APPOINTMENT_STATES.has(n.appointment_status)) return true;
+    if (!n.appointment_slot || !n.payload_slot) return true;
+    return Date.parse(n.appointment_slot) !== Date.parse(n.payload_slot);
+  }
+  const sendableStates = SENDABLE_TICKET_STATES[n.notification_type];
+  return !n.ticket_id || !n.ticket_state || !sendableStates?.has(n.ticket_state);
 }
 
 /**
@@ -55,10 +86,7 @@ export function decideNotification(
   live: boolean,
   allowlist?: ReadonlySet<string> | null,
 ): { action: 'send' } | { action: 'skip'; reason: SkipReason } {
-  const sendableStates = SENDABLE_TICKET_STATES[n.notification_type];
-  if (!n.ticket_id || !n.ticket_state || !sendableStates?.has(n.ticket_state)) {
-    return { action: 'skip', reason: 'stale' };
-  }
+  if (isStale(n)) return { action: 'skip', reason: 'stale' };
   const ageMs = now.getTime() - new Date(n.created_at).getTime();
   if (ageMs > MAX_NOTIFICATION_AGE_MINUTES * 60 * 1000)
     return { action: 'skip', reason: 'expired' };
@@ -106,10 +134,19 @@ export function buildYoureNextSms(input: {
   return `Pixel Barber: You're next at ${input.branchName}! Please head over now. Ticket ${input.ticketNumber}: ${input.link}`;
 }
 
+/** "2:30 PM" for an ISO timestamp, in UTC (Ghana time). */
+export function formatReminderTime(iso: string): string {
+  const d = new Date(iso);
+  const hours = d.getUTCHours();
+  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${minutes} ${hours < 12 ? 'AM' : 'PM'}`;
+}
+
 /** The text for one enabled notification type. */
 export function buildNotificationSms(
   type: SmsNotificationType,
-  input: { branchName: string; ticketNumber: string; link: string },
+  input: { branchName: string; ticketNumber: string; link: string; slot?: string },
 ): string {
   switch (type) {
     case 'youre_next':
@@ -118,6 +155,10 @@ export function buildNotificationSms(
       return `Pixel Barber: It's your turn at ${input.branchName}! Please go to your barber now. Ticket ${input.ticketNumber}: ${input.link}`;
     case 'ticket_released':
       return `Pixel Barber: Your ticket ${input.ticketNumber} at ${input.branchName} was released because you weren't available in time. Rejoin here: ${input.link}`;
+    case 'appointment_reminder_day':
+      return `Pixel Barber: Reminder, your appointment at ${input.branchName} is tomorrow at ${formatReminderTime(input.slot ?? '')}.`;
+    case 'appointment_reminder_hour':
+      return `Pixel Barber: Your appointment at ${input.branchName} is today at ${formatReminderTime(input.slot ?? '')}, in about an hour.`;
   }
 }
 

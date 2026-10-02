@@ -9,6 +9,7 @@ import {
   buildNotificationSms,
   buildYoureNextSms,
   decideNotification,
+  formatReminderTime,
   isUsableCustomerAppUrl,
   parseAllowlist,
   ticketLink,
@@ -188,10 +189,14 @@ describe('message building', () => {
 });
 
 describe('your_turn and ticket_released', () => {
-  it('enables all three types', () => {
-    expect([...SMS_NOTIFICATION_TYPES].sort()).toEqual(
-      ['ticket_released', 'your_turn', 'youre_next'].sort(),
-    );
+  it('enables all five types', () => {
+    expect([...SMS_NOTIFICATION_TYPES]).toEqual([
+      'youre_next',
+      'your_turn',
+      'ticket_released',
+      'appointment_reminder_day',
+      'appointment_reminder_hour',
+    ]);
   });
 
   it.each([
@@ -301,5 +306,83 @@ describe('sendArkeselSms', () => {
       throw new DOMException('aborted', 'AbortError');
     });
     expect(await sendArkeselSms('+233244123456', 'x', config, aborting)).toBe('unknown_outcome');
+  });
+});
+
+describe('appointment reminders', () => {
+  const reminder = (overrides: Partial<ClaimedNotification> = {}) =>
+    row({
+      notification_type: 'appointment_reminder_hour',
+      ticket_id: null,
+      ticket_state: null,
+      ticket_number: null,
+      appointment_id: 'a1',
+      appointment_status: 'scheduled',
+      appointment_slot: '2026-09-25T14:30:00+00:00',
+      payload_slot: '2026-09-25T14:30:00+00:00',
+      ...overrides,
+    });
+
+  it('sends a reminder for a still-booked appointment at the same slot', () => {
+    expect(decideNotification(reminder(), NOW, true)).toEqual({ action: 'send' });
+  });
+
+  it('sends for a checked-in appointment and for the evening-before type', () => {
+    expect(decideNotification(reminder({ appointment_status: 'checked_in' }), NOW, true)).toEqual({
+      action: 'send',
+    });
+    expect(
+      decideNotification(reminder({ notification_type: 'appointment_reminder_day' }), NOW, true),
+    ).toEqual({ action: 'send' });
+  });
+
+  it('treats the same instant written differently as the same slot', () => {
+    expect(
+      decideNotification(reminder({ payload_slot: '2026-09-25T14:30:00Z' }), NOW, true),
+    ).toEqual({ action: 'send' });
+  });
+
+  it.each([
+    ['cancelled', reminder({ appointment_status: 'cancelled' })],
+    ['converted', reminder({ appointment_status: 'converted' })],
+    ['moved to another slot', reminder({ payload_slot: '2026-09-25T13:30:00+00:00' })],
+    ['gone', reminder({ appointment_id: null, appointment_status: null, appointment_slot: null })],
+  ])('is stale when the appointment is %s', (_label, n) => {
+    expect(decideNotification(n, NOW, true)).toEqual({ action: 'skip', reason: 'stale' });
+  });
+
+  it('is claimable', () => {
+    expect(SMS_NOTIFICATION_TYPES).toContain('appointment_reminder_day');
+    expect(SMS_NOTIFICATION_TYPES).toContain('appointment_reminder_hour');
+  });
+});
+
+describe('formatReminderTime', () => {
+  it.each([
+    ['2026-09-25T14:30:00Z', '2:30 PM'],
+    ['2026-09-25T09:00:00Z', '9:00 AM'],
+    ['2026-09-25T12:00:00Z', '12:00 PM'],
+    ['2026-09-25T00:05:00Z', '12:05 AM'],
+  ])('%s -> %s', (iso, text) => {
+    expect(formatReminderTime(iso)).toBe(text);
+  });
+});
+
+describe('reminder texts', () => {
+  const input = {
+    branchName: 'Osu Branch',
+    ticketNumber: '',
+    link: '',
+    slot: '2026-09-26T14:30:00Z',
+  };
+  it('evening before', () => {
+    expect(buildNotificationSms('appointment_reminder_day', input)).toBe(
+      'Pixel Barber: Reminder, your appointment at Osu Branch is tomorrow at 2:30 PM.',
+    );
+  });
+  it('one hour before', () => {
+    expect(buildNotificationSms('appointment_reminder_hour', input)).toBe(
+      'Pixel Barber: Your appointment at Osu Branch is today at 2:30 PM, in about an hour.',
+    );
   });
 });
