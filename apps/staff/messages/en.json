@@ -301,6 +301,7 @@
     "markNoShow": "Mark no-show",
     "back": "Back",
     "inQueue": "Now in the queue.",
+    "startedEarly": "Started early — now in the queue.",
     "openLiveQueue": "Open the Live Queue",
     "backToCalendar": "Back to appointments",
     "notFound": "We couldn't find this appointment.",

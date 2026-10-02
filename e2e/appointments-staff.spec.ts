@@ -207,7 +207,11 @@ test('receptionist books, checks in, reschedules and cancels; barber sees today 
     // --- 3. Check in (only offered on the day of the appointment) ---
     if (todayWorks) {
       await main.getByRole('button', { name: 'Check in' }).press('Enter');
-      await expect(main.getByText('Status: Checked in')).toBeVisible({ timeout: 15000 });
+      // Nobody is in the barber's line, so the appointment starts at once.
+      await expect(main.getByText('Started early — now in the queue.')).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(main.getByText('Status: In the queue')).toBeVisible({ timeout: 15000 });
     } else {
       await expect(main.getByRole('button', { name: 'Check in' })).toHaveCount(0);
     }
@@ -285,7 +289,7 @@ test('receptionist books, checks in, reschedules and cancels; barber sees today 
       .eq('customer_id', byName('Staff E2E Walker'))
       .single();
     expect(first).toMatchObject({
-      status: todayWorks ? 'checked_in' : 'scheduled',
+      status: todayWorks ? 'converted' : 'scheduled',
       created_by: 'staff',
     });
     const { data: second } = await admin

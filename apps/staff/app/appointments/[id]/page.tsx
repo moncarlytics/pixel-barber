@@ -51,6 +51,7 @@ export default function StaffAppointmentPage() {
   const [reason, setReason] = useState<Reason | null>(null);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const [startedEarlyId, setStartedEarlyId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const requestKey = `${params.id}:${reloadKey}`;
 
@@ -110,6 +111,23 @@ export default function StaffAppointmentPage() {
     setReloadKey((k) => k + 1);
   }
 
+  async function checkIn(id: string) {
+    setBusy(true);
+    setActionError(undefined);
+    const { data: ticketId, error } = await supabase.rpc('staff_check_in_appointment', {
+      p_appointment_id: id,
+    });
+    setBusy(false);
+    if (error) {
+      setActionError(error.message);
+      setReloadKey((k) => k + 1);
+      return;
+    }
+    if (ticketId) setStartedEarlyId(id);
+    resetMode();
+    setReloadKey((k) => k + 1);
+  }
+
   const backLink = <Link href="/appointments">{t('backToCalendar')}</Link>;
 
   if (!current) {
@@ -162,7 +180,7 @@ export default function StaffAppointmentPage() {
 
       {row.status === 'converted' && (
         <>
-          <p>{t('inQueue')}</p>
+          <p>{startedEarlyId === row.id ? t('startedEarly') : t('inQueue')}</p>
           <Link href="/tickets">{t('openLiveQueue')}</Link>
         </>
       )}
@@ -170,13 +188,7 @@ export default function StaffAppointmentPage() {
       {actionable && mode === 'view' && (
         <div>
           {row.status === 'scheduled' && isToday && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                run(supabase.rpc('staff_check_in_appointment', { p_appointment_id: row.id }))
-              }
-            >
+            <button type="button" disabled={busy} onClick={() => checkIn(row.id)}>
               {t('checkIn')}
             </button>
           )}
