@@ -12,6 +12,7 @@ import {
   createStaffLogin,
   dateAt,
   slotAt,
+  deleteBranchAppointments,
   type AppointmentFixture,
 } from './fixtures/appointments';
 
@@ -32,7 +33,7 @@ beforeAll(async () => {
 }, 90000);
 
 afterAll(async () => {
-  await f.admin.from('appointments').delete().in('branch_id', [f.branchId, f.closedBranchId]);
+  await deleteBranchAppointments(f.admin, [f.branchId, f.closedBranchId]);
   await cleanupStaffLogin(f, reception);
   await cleanupStaffLogin(f, otherManager);
   if (createdCustomerIds.length > 0) {

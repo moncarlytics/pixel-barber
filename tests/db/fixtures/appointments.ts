@@ -212,6 +212,29 @@ export async function createAppointmentFixture(): Promise<AppointmentFixture> {
   };
 }
 
+/** Deletes these appointments and the notifications pointing at them (the live cron may have
+ * queued reminder texts for any appointment a test creates). Tickets must already be gone. */
+export async function deleteAppointmentsByIds(admin: Client, ids: string[]) {
+  if (ids.length === 0) return;
+  const { error: notificationsError } = await admin
+    .from('notifications')
+    .delete()
+    .in('related_appointment_id', ids);
+  if (notificationsError) throw notificationsError;
+  const { error } = await admin.from('appointments').delete().in('id', ids);
+  if (error) throw error;
+}
+
+/** deleteAppointmentsByIds for every appointment at these branches. */
+export async function deleteBranchAppointments(admin: Client, branchIds: string[]) {
+  const { data, error } = await admin.from('appointments').select('id').in('branch_id', branchIds);
+  if (error) throw error;
+  await deleteAppointmentsByIds(
+    admin,
+    (data ?? []).map((a) => a.id),
+  );
+}
+
 export async function cleanupAppointmentFixture(f: AppointmentFixture) {
   const { admin } = f;
   const branchIds = [f.branchId, f.closedBranchId];
@@ -225,7 +248,7 @@ export async function cleanupAppointmentFixture(f: AppointmentFixture) {
     await admin.from('notifications').delete().in('related_ticket_id', ticketIds);
     await admin.from('queue_tickets').delete().in('id', ticketIds);
   }
-  await admin.from('appointments').delete().in('branch_id', branchIds);
+  await deleteBranchAppointments(admin, branchIds);
   for (const c of f.customers) {
     await admin.from('customers').delete().eq('id', c.customerId);
     await admin.auth.admin.deleteUser(c.authUserId);

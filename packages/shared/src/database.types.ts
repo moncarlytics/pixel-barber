@@ -1642,8 +1642,17 @@ export type Database = {
         }[];
       };
       next_ticket_number: { Args: { p_branch_id: string }; Returns: string };
+      preview_wait_estimate: {
+        Args: { p_branch_service_id: string; p_barber_id: string | null };
+        Returns: { low_min: number; high_min: number }[];
+      };
       recalculate_positions: {
         Args: { p_barber_id: string; p_branch_id: string };
+        Returns: undefined;
+      };
+      refresh_all_wait_estimates: { Args: never; Returns: undefined };
+      refresh_wait_estimates: {
+        Args: { p_branch_id: string; p_barber_id: string };
         Returns: undefined;
       };
       reschedule_appointment: {

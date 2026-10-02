@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   cleanupAppointmentFixture,
   createAppointmentFixture,
+  deleteAppointmentsByIds,
   type AppointmentFixture,
 } from './fixtures/appointments';
 
@@ -242,7 +243,7 @@ describe('activate_due_appointments', () => {
         .from('barbers')
         .update({ status: 'available' })
         .in('id', [f.barberA.barberId, f.barberB.barberId]);
-      await f.admin.from('appointments').delete().eq('id', id);
+      await deleteAppointmentsByIds(f.admin, [id]);
     }
   });
 
@@ -289,7 +290,7 @@ describe('activate_due_appointments', () => {
       expect(await ticketsFor(id)).toHaveLength(0);
       expect(await countEvents()).toBe(before);
     } finally {
-      await f.admin.from('appointments').delete().eq('id', id);
+      await deleteAppointmentsByIds(f.admin, [id]);
     }
   });
 

@@ -188,6 +188,13 @@ test('customer books, reschedules and cancels an appointment', async ({
       main.getByRole('region', { name: 'Upcoming' }).getByText('No upcoming appointments.'),
     ).toBeVisible({ timeout: 15000 });
   } finally {
+    const { data: apptRows } = await admin
+      .from('appointments')
+      .select('id')
+      .eq('customer_id', customer!.id);
+    const apptIds = (apptRows ?? []).map((a) => a.id);
+    if (apptIds.length)
+      await admin.from('notifications').delete().in('related_appointment_id', apptIds);
     await admin.from('appointments').delete().eq('customer_id', customer!.id);
     await admin.from('customers').delete().eq('id', customer!.id);
     await admin.auth.admin.deleteUser(customerAuth!.user.id);
