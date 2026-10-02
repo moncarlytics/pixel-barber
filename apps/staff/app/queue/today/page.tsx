@@ -14,6 +14,7 @@ import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, updateTicketWithVersion } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
 import NotPresentModal from './NotPresentModal';
+import TodaysAppointments from './TodaysAppointments';
 
 type Ticket = Database['public']['Tables']['queue_tickets']['Row'];
 type Barber = Database['public']['Tables']['barbers']['Row'];
@@ -379,6 +380,8 @@ export default function TodaysQueuePage() {
           <p>{t('noNextCustomer')}</p>
         )}
       </section>
+
+      <TodaysAppointments />
     </main>
   );
 }

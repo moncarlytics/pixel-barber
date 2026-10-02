@@ -251,7 +251,10 @@
     "confirmButton": "Confirm",
     "cancelButton": "Cancel",
     "conflictMessage": "This ticket was just updated by someone else — showing the latest state.",
-    "actionFailed": "Something went wrong. Please try again."
+    "actionFailed": "Something went wrong. Please try again.",
+    "appointmentsTitle": "Today's appointments",
+    "appointmentRow": "{time} — {name}",
+    "appointmentCheckedIn": "{time} — {name} (checked in)"
   },
   "StaffAppointments": {
     "title": "Appointments",
@@ -301,6 +304,14 @@
     "pickDate": "Pick a day",
     "loadingSlots": "Loading times…",
     "noSlots": "No open times on this day.",
+    "newTitle": "Book for a customer",
+    "customerName": "Customer name",
+    "customerPhone": "Phone (optional)",
+    "continue": "Continue",
+    "service": "Service",
+    "changeTime": "Change time",
+    "confirmBook": "Book appointment",
+    "reviewTitle": "Review",
     "reasons": {
       "wait_too_long": "Wait too long",
       "cant_make_it": "Can't make it",
