@@ -23,6 +23,7 @@ const REASONS: { value: CancelReason; labelKey: string }[] = [
   { value: 'other', labelKey: 'reasonOther' },
 ];
 const CHANGE_CUTOFF_MS = 60 * 60 * 1000;
+const ARRIVE_WINDOW_MS = 30 * 60 * 1000;
 
 interface Loaded {
   appointment: Appointment;
@@ -31,6 +32,7 @@ interface Loaded {
   barberName: string | null;
   priceGhs: number | null;
   changeable: boolean;
+  canArrive: boolean;
 }
 
 export default function AppointmentDetailPage() {
@@ -97,6 +99,9 @@ export default function AppointmentDetailPage() {
         changeable:
           appointment.status === 'scheduled' &&
           new Date(appointment.scheduled_start).getTime() - Date.now() > CHANGE_CUTOFF_MS,
+        canArrive:
+          appointment.status === 'scheduled' &&
+          Date.now() >= new Date(appointment.scheduled_start).getTime() - ARRIVE_WINDOW_MS,
       });
     }
     load();
@@ -113,7 +118,8 @@ export default function AppointmentDetailPage() {
       </main>
     ) : null;
   }
-  const { appointment, serviceName, branchName, barberName, priceGhs, changeable } = loaded;
+  const { appointment, serviceName, branchName, barberName, priceGhs, changeable, canArrive } =
+    loaded;
 
   function goBack() {
     setMode('view');
@@ -141,6 +147,25 @@ export default function AppointmentDetailPage() {
     }
     setMode('view');
     setNewSlot(null);
+    setReloadKey((n) => n + 1);
+  }
+
+  async function handleArrive() {
+    setBusy(true);
+    setError(null);
+    const { data: ticketId, error: rpcError } = await supabase.rpc('check_in_my_appointment', {
+      p_appointment_id: appointment.id,
+    });
+    setBusy(false);
+    if (rpcError) {
+      setError(t(appointmentErrorKey(rpcError.message)));
+      setReloadKey((n) => n + 1);
+      return;
+    }
+    if (ticketId) {
+      router.push(`/tickets/${ticketId}`);
+      return;
+    }
     setReloadKey((n) => n + 1);
   }
 
@@ -178,6 +203,14 @@ export default function AppointmentDetailPage() {
             : t('anyBarber')}
       </p>
       <p>{t('statusLabel', { status: t(`statuses.${appointment.status}`) })}</p>
+      {appointment.status === 'checked_in' && (
+        <p>{t('checkedInWait', { time: formatSlotTime(appointment.scheduled_start) })}</p>
+      )}
+      {mode === 'view' && canArrive && (
+        <button type="button" disabled={busy} onClick={handleArrive}>
+          {t('arrived')}
+        </button>
+      )}
 
       {mode === 'view' &&
         (changeable ? (

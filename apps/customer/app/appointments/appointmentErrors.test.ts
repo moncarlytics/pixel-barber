@@ -10,6 +10,8 @@ describe('appointmentErrorKey', () => {
     ['too_far_ahead', 'tooFarAhead'],
     ['too_late', 'tooLate'],
     ['not_a_customer', 'notACustomer'],
+    ['too_early', 'tooEarly'],
+    ['not_found', 'notFound'],
   ])('maps %s', (code, key) => {
     expect(appointmentErrorKey(code)).toBe(key);
   });

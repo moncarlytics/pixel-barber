@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient } from '@pixel-barber/shared';
@@ -26,7 +26,7 @@ export default function BookFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const branchId = searchParams.get('branch');
-  const supabase = createBrowserSupabaseClient();
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const [step, setStep] = useState<Step>('service');
   const [services, setServices] = useState<ServiceOption[]>([]);
@@ -69,7 +69,31 @@ export default function BookFlow() {
       setBarbers(barberRows ?? []);
     }
     load();
-  }, [branchId]);
+  }, [supabase, branchId]);
+
+  const [estimate, setEstimate] = useState<{ key: string; low: number; high: number } | null>(null);
+  // The barber the new ticket would get: the chosen one, or the next available when the customer
+  // picked "any" or accepted the fallback (preview_wait_estimate resolves null itself).
+  const estimateBarberId = acceptFallback ? null : selectedBarberId;
+  const estimateKey = `${selectedServiceId}:${estimateBarberId ?? 'any'}`;
+
+  useEffect(() => {
+    if (step !== 'review' || !selectedServiceId) return;
+    let cancelled = false;
+    supabase
+      .rpc('preview_wait_estimate', {
+        p_branch_service_id: selectedServiceId,
+        p_barber_id: estimateBarberId,
+      })
+      .then(({ data, error: previewError }) => {
+        if (cancelled || previewError) return;
+        const row = data?.[0];
+        if (row) setEstimate({ key: estimateKey, low: row.low_min, high: row.high_min });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, step, selectedServiceId, estimateBarberId, estimateKey]);
 
   async function handleSelectBarber(barberId: string | null) {
     setError(null);
@@ -281,6 +305,13 @@ export default function BookFlow() {
           <h2>{t('reviewTitle')}</h2>
           <p>{services.find((s) => s.branchServiceId === selectedServiceId)?.serviceName}</p>
           <p>{selectedBarberName ?? t('anyAvailable')}</p>
+          {estimate && estimate.key === estimateKey && (
+            <p>
+              {estimate.low === estimate.high
+                ? t('waitEstimateExact', { low: estimate.low })
+                : t('waitEstimate', { low: estimate.low, high: estimate.high })}
+            </p>
+          )}
           <button type="button" disabled={submitting} onClick={handleConfirmJoin}>
             {t('confirmJoin')}
           </button>

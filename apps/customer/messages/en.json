@@ -161,7 +161,10 @@
     "bookOne": "Book an appointment",
     "viewUpcoming": "View my appointments",
     "branchLabel": "Branch: {branch}",
-    "notFound": "We couldn't find this appointment."
+    "notFound": "We couldn't find this appointment.",
+    "arrived": "I've arrived",
+    "tooEarly": "You can check in from 30 minutes before your appointment.",
+    "checkedInWait": "You're checked in. We'll call you at {time}."
   },
   "Book": {
     "modeJoinNow": "Join Now",
@@ -176,6 +179,8 @@
     "barberStepTitle": "Barber",
     "anyAvailable": "Any available",
     "waitEstimateLabel": "Estimated wait",
+    "waitEstimate": "Estimated wait: {low}–{high} min",
+    "waitEstimateExact": "Estimated wait: {low} min",
     "reviewTitle": "Review & Confirm",
     "confirmJoin": "Join Now",
     "alreadyInQueue": "You're already in the queue for this branch.",

@@ -7,6 +7,8 @@ export type AppointmentErrorKey =
   | 'tooFarAhead'
   | 'tooLate'
   | 'notACustomer'
+  | 'tooEarly'
+  | 'notFound'
   | 'generic';
 
 const KEYS: Record<string, AppointmentErrorKey> = {
@@ -17,6 +19,8 @@ const KEYS: Record<string, AppointmentErrorKey> = {
   too_far_ahead: 'tooFarAhead',
   too_late: 'tooLate',
   not_a_customer: 'notACustomer',
+  too_early: 'tooEarly',
+  not_found: 'notFound',
 };
 
 export function appointmentErrorKey(message: string | undefined): AppointmentErrorKey {
