@@ -90,6 +90,7 @@
     "visitHistoryTitle": "Visit History",
     "noVisits": "No visits yet.",
     "feedbackHistoryTitle": "Feedback History",
+    "feedbackItem": "{date} · {branch} · {barber} · {stars, plural, one {# star} other {# stars}}",
     "noFeedback": "No feedback submitted yet.",
     "logOut": "Log Out"
   },
@@ -234,5 +235,20 @@
     "turnOn": "Turn on",
     "iosHint": "To get notifications on iPhone, tap Share, then Add to Home Screen.",
     "off": "Push notifications are off — you'll still get SMS updates."
+  },
+  "Feedback": {
+    "title": "How was your visit?",
+    "stars": "{count, plural, one {# star} other {# stars}}",
+    "tellUsMore": "Tell us more",
+    "serviceQuality": "Service quality",
+    "barberProfessionalism": "Barber professionalism",
+    "waitingExperience": "Waiting experience",
+    "cleanliness": "Cleanliness",
+    "value": "Value for money",
+    "commentPlaceholder": "Anything you'd like to add? (optional)",
+    "send": "Send",
+    "thanks": "Thanks for your feedback!",
+    "closed": "Feedback for this visit has closed.",
+    "failed": "Couldn't send your feedback. Please try again."
   }
 }

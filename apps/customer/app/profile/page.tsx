@@ -26,6 +26,16 @@ export default function ProfilePage() {
   const [deviceSaved, setDeviceSaved] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [feedback, setFeedback] = useState<
+    {
+      id: string;
+      created_at: string;
+      branch_name: string;
+      barber_name: string;
+      overall_rating: number;
+      comment: string | null;
+    }[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -45,6 +55,8 @@ export default function ProfilePage() {
     const savedHere = subscription ? await isThisDeviceSaved(supabase, subscription) : false;
     setDeviceSaved(savedHere);
     setCustomer(customerRow ?? null);
+    const { data: feedbackRows } = await supabase.rpc('list_my_feedback');
+    setFeedback(feedbackRows ?? []);
 
     const { data: branchRows } = await supabase.from('branches').select('*').order('name');
     setBranches(branchRows ?? []);
@@ -252,7 +264,30 @@ export default function ProfilePage() {
       <p>{t('noVisits')}</p>
 
       <h2>{t('feedbackHistoryTitle')}</h2>
-      <p>{t('noFeedback')}</p>
+      {feedback.length === 0 ? (
+        <p>{t('noFeedback')}</p>
+      ) : (
+        <ul>
+          {feedback.map((fb) => (
+            <li key={fb.id}>
+              <p>
+                {t('feedbackItem', {
+                  date: new Date(fb.created_at).toLocaleDateString('en-GB', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    timeZone: 'UTC',
+                  }),
+                  branch: fb.branch_name,
+                  barber: fb.barber_name,
+                  stars: fb.overall_rating,
+                })}
+              </p>
+              {fb.comment && <p>{fb.comment}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <button type="button" onClick={handleLogout}>
         {t('logOut')}

@@ -10,6 +10,7 @@ import {
 } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
 import PushBanner from '../../push/PushBanner';
+import FeedbackForm from './FeedbackForm';
 
 type Ticket = Database['public']['Tables']['queue_tickets']['Row'];
 type Customer = Database['public']['Tables']['customers']['Row'];
@@ -172,7 +173,12 @@ export default function TicketTrackingPage() {
         </>
       )}
 
-      {isCompleted && <p>{t('stateCompleted')}</p>}
+      {isCompleted && (
+        <>
+          <p>{t('stateCompleted')}</p>
+          <FeedbackForm ticketId={ticket.id} completedAt={ticket.completed_at} />
+        </>
+      )}
 
       {showCancelSheet && (
         <div role="dialog" aria-label={t('cancelSheetTitle')}>
