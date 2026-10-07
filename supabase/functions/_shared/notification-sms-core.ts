@@ -40,6 +40,13 @@ export const RUN_DEADLINE_MS = 60_000;
 export type SkipReason =
   'stale' | 'expired' | 'opted_out' | 'no_phone' | 'not_allowlisted' | 'sms_disabled';
 
+/** One saved device to push to (from claim_sms_notifications' push_subscriptions). */
+export interface PushTarget {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
 /** One row returned by claim_sms_notifications. */
 export interface ClaimedNotification {
   notification_id: string;
@@ -59,6 +66,9 @@ export interface ClaimedNotification {
   appointment_status?: string | null;
   appointment_slot?: string | null;
   payload_slot?: string | null;
+  /** The customer's push switch and saved devices (empty array when none). */
+  push_enabled?: boolean | null;
+  push_subscriptions?: PushTarget[] | null;
 }
 
 /** A ticket notification whose ticket has moved on, or a reminder whose appointment is no longer
@@ -74,6 +84,18 @@ function isStale(n: ClaimedNotification): boolean {
   return !n.ticket_id || !n.ticket_state || !sendableStates?.has(n.ticket_state);
 }
 
+/** The checks that apply whatever the channel: a stale or expired notification is never sent. */
+export function precheckNotification(
+  n: ClaimedNotification,
+  now: Date,
+): { action: 'skip'; reason: 'stale' | 'expired' } | { action: 'continue' } {
+  if (isStale(n)) return { action: 'skip', reason: 'stale' };
+  const ageMs = now.getTime() - new Date(n.created_at).getTime();
+  if (ageMs > MAX_NOTIFICATION_AGE_MINUTES * 60 * 1000)
+    return { action: 'skip', reason: 'expired' };
+  return { action: 'continue' };
+}
+
 /**
  * Decides one claimed notification, checking stale → expired → opted_out → no_phone →
  * not_allowlisted → live. `allowlist`, when a non-empty set, restricts sending to the phone numbers
@@ -86,10 +108,8 @@ export function decideNotification(
   live: boolean,
   allowlist?: ReadonlySet<string> | null,
 ): { action: 'send' } | { action: 'skip'; reason: SkipReason } {
-  if (isStale(n)) return { action: 'skip', reason: 'stale' };
-  const ageMs = now.getTime() - new Date(n.created_at).getTime();
-  if (ageMs > MAX_NOTIFICATION_AGE_MINUTES * 60 * 1000)
-    return { action: 'skip', reason: 'expired' };
+  const pre = precheckNotification(n, now);
+  if (pre.action === 'skip') return pre;
   if (n.sms_backup_enabled === false) return { action: 'skip', reason: 'opted_out' };
   if (!n.phone_e164) return { action: 'skip', reason: 'no_phone' };
   if (allowlist && allowlist.size > 0 && !allowlist.has(n.phone_e164)) {

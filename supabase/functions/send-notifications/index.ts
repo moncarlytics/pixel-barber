@@ -1,6 +1,6 @@
 // supabase/functions/send-notifications/index.ts
-// Queue and appointment-reminder SMS sender (Docs/superpowers/specs/2026-09-25-queue-sms-notifications-design.md;
-// reminders: Docs/superpowers/specs/2026-10-02-appointments-reminders-checkin-wait-design.md). Called
+// Queue and appointment-reminder sender: web push first, SMS as fallback (Docs/superpowers/specs/2026-09-25-queue-sms-notifications-design.md;
+// reminders: Docs/superpowers/specs/2026-10-02-appointments-reminders-checkin-wait-design.md; push: Docs/superpowers/specs/2026-10-07-web-push-notifications-design.md). Called
 // every 30 seconds by the send-notifications pg_cron job (and by tests) with the service role key;
 // never by the apps. Claims pending SMS notifications, decides each (stale / expired / opted out /
 // no phone / live sending off), texts the rest through Arkesel, and records sent or failed.
@@ -12,6 +12,14 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { json } from '../_shared/http.ts';
 import { sendArkeselSms } from '../_shared/arkesel.ts';
 import {
+  PUSH_TTL_SECONDS,
+  buildPushPayload,
+  pushTargets,
+  pushUrgency,
+  shouldAttemptPush,
+} from '../_shared/notification-push-core.ts';
+import { loadPushConfig, sendWebPush } from '../_shared/web-push.ts';
+import {
   DISPATCH_BATCH_SIZE,
   RUN_DEADLINE_MS,
   SMS_NOTIFICATION_TYPES,
@@ -20,6 +28,7 @@ import {
   decideNotification,
   isUsableCustomerAppUrl,
   parseAllowlist,
+  precheckNotification,
   ticketLink,
   type ClaimedNotification,
   type SmsNotificationType,
@@ -60,6 +69,7 @@ Deno.serve(async (req) => {
     apiKey: Deno.env.get('ARKESEL_API_KEY') ?? undefined,
     senderId: Deno.env.get('ARKESEL_SENDER_ID') ?? undefined,
   };
+  const pushConfig = loadPushConfig();
 
   const { data, error } = await admin.rpc('claim_sms_notifications', {
     p_types: [...SMS_NOTIFICATION_TYPES],
@@ -72,6 +82,7 @@ Deno.serve(async (req) => {
   const rows = (data ?? []) as ClaimedNotification[];
   const summary = {
     claimed: rows.length,
+    pushed: 0,
     sent: 0,
     retried: 0,
     failed: 0,
@@ -106,7 +117,62 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    const decision = decideNotification(n, new Date(), live, allowlist);
+    const now = new Date();
+    const pre = precheckNotification(n, now);
+    if (pre.action === 'skip') {
+      await fail(n.notification_id, pre.reason);
+      summary.skipped[pre.reason] = (summary.skipped[pre.reason] ?? 0) + 1;
+      continue;
+    }
+    // precheckNotification already rejected types outside SMS_NOTIFICATION_TYPES as stale.
+    const type = n.notification_type as SmsNotificationType;
+
+    // Push first: every saved device; any device accepting it means delivered (no SMS).
+    let pushAttempted = false;
+    if (pushConfig && shouldAttemptPush(n)) {
+      pushAttempted = true;
+      const payload = buildPushPayload(type, n);
+      const targets = pushTargets(n);
+      const results = await Promise.all(
+        targets.map((target) =>
+          sendWebPush(pushConfig, target, payload, {
+            ttl: PUSH_TTL_SECONDS,
+            urgency: pushUrgency(type),
+          }),
+        ),
+      );
+      const gone = targets.filter((_, i) => results[i] === 'gone').map((t) => t.endpoint);
+      if (gone.length > 0) {
+        const { error: goneError } = await admin
+          .from('push_subscriptions')
+          .delete()
+          .in('endpoint', gone);
+        if (goneError)
+          console.error('send-notifications: could not delete gone subscriptions', goneError);
+      }
+      if (results.includes('ok')) {
+        const { error: pushedError } = await admin
+          .from('notifications')
+          .update({
+            channel: 'push',
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            failed_reason: null,
+            dispatch_claimed_at: null,
+          })
+          .eq('id', n.notification_id);
+        if (pushedError)
+          console.error('send-notifications: could not record push', {
+            id: n.notification_id,
+            pushedError,
+          });
+        summary.pushed++;
+        continue;
+      }
+    }
+
+    // SMS: no push attempt, or every device failed.
+    const decision = decideNotification(n, now, live, allowlist);
     if (decision.action === 'skip') {
       await fail(n.notification_id, decision.reason);
       summary.skipped[decision.reason] = (summary.skipped[decision.reason] ?? 0) + 1;
@@ -120,8 +186,7 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // decideNotification only returns 'send' for a type listed in SMS_NOTIFICATION_TYPES.
-    const message = buildNotificationSms(n.notification_type as SmsNotificationType, {
+    const message = buildNotificationSms(type, {
       branchName: n.branch_name ?? 'Pixel Barber',
       ticketNumber: n.ticket_number ?? '',
       link: n.ticket_id ? ticketLink(customerAppUrl, n.ticket_id) : '',
@@ -133,7 +198,7 @@ Deno.serve(async (req) => {
       const { error: updateError } = await admin
         .from('notifications')
         .update({
-          status: 'sent',
+          status: pushAttempted ? 'fallback_sent' : 'sent',
           sent_at: new Date().toISOString(),
           failed_reason: null,
           dispatch_claimed_at: null,

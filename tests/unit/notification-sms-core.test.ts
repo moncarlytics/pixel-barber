@@ -11,6 +11,7 @@ import {
   decideNotification,
   formatReminderTime,
   isUsableCustomerAppUrl,
+  precheckNotification,
   parseAllowlist,
   ticketLink,
   type ClaimedNotification,
@@ -383,6 +384,30 @@ describe('reminder texts', () => {
   it('one hour before', () => {
     expect(buildNotificationSms('appointment_reminder_hour', input)).toBe(
       'Pixel Barber: Your appointment at Osu Branch is today at 2:30 PM, in about an hour.',
+    );
+  });
+});
+describe('precheckNotification', () => {
+  it('continues for a fresh, current notification', () => {
+    expect(precheckNotification(row(), NOW)).toEqual({ action: 'continue' });
+  });
+  it('skips stale before expired', () => {
+    expect(
+      precheckNotification(
+        row({ ticket_state: 'called', created_at: '2026-09-25T11:00:00Z' }),
+        NOW,
+      ),
+    ).toEqual({ action: 'skip', reason: 'stale' });
+  });
+  it('skips expired', () => {
+    expect(precheckNotification(row({ created_at: '2026-09-25T11:49:59Z' }), NOW)).toEqual({
+      action: 'skip',
+      reason: 'expired',
+    });
+  });
+  it('does not look at SMS settings', () => {
+    expect(precheckNotification(row({ sms_backup_enabled: false, phone_e164: null }), NOW)).toEqual(
+      { action: 'continue' },
     );
   });
 });
