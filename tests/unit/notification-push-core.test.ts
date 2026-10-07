@@ -158,3 +158,20 @@ describe('push result decisions', () => {
     expect(goneEndpoints(targets, ['gone', 'ok', 'failed'])).toEqual(['https://a']);
   });
 });
+
+describe('feedback_request push', () => {
+  it('asks how the cut was and opens the ticket', () => {
+    expect(
+      buildPushPayload(
+        'feedback_request',
+        row({ notification_type: 'feedback_request', ticket_state: 'completed' }),
+      ),
+    ).toEqual({
+      title: 'Pixel Barber',
+      body: 'How was your cut at Osu Branch? Tap to rate.',
+      url: '/tickets/t1',
+      tag: 'n1',
+    });
+    expect(pushUrgency('feedback_request')).toBe('normal');
+  });
+});

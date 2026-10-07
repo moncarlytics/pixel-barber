@@ -1529,6 +1529,7 @@ export type Database = {
           payload_slot: string | null;
           push_enabled: boolean | null;
           push_subscriptions: Json;
+          ticket_has_feedback: boolean | null;
         }[];
       };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };

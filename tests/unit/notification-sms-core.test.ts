@@ -197,6 +197,7 @@ describe('your_turn and ticket_released', () => {
       'ticket_released',
       'appointment_reminder_day',
       'appointment_reminder_hour',
+      'feedback_request',
     ]);
   });
 
@@ -408,6 +409,42 @@ describe('precheckNotification', () => {
   it('does not look at SMS settings', () => {
     expect(precheckNotification(row({ sms_backup_enabled: false, phone_e164: null }), NOW)).toEqual(
       { action: 'continue' },
+    );
+  });
+});
+
+describe('feedback_request', () => {
+  const request = (overrides: Partial<ClaimedNotification> = {}) =>
+    row({
+      notification_type: 'feedback_request',
+      ticket_state: 'completed',
+      ticket_has_feedback: false,
+      ...overrides,
+    });
+
+  it('sends for a completed visit not yet rated', () => {
+    expect(decideNotification(request(), NOW, true)).toEqual({ action: 'send' });
+  });
+  it('is stale once rated or if the ticket is no longer completed', () => {
+    expect(decideNotification(request({ ticket_has_feedback: true }), NOW, true)).toEqual({
+      action: 'skip',
+      reason: 'stale',
+    });
+    expect(decideNotification(request({ ticket_state: 'cancelled' }), NOW, true)).toEqual({
+      action: 'skip',
+      reason: 'stale',
+    });
+  });
+  it('is claimable and has the SMS text', () => {
+    expect(SMS_NOTIFICATION_TYPES).toContain('feedback_request');
+    expect(
+      buildNotificationSms('feedback_request', {
+        branchName: 'Osu Branch',
+        ticketNumber: 'A12',
+        link: 'https://app.example/tickets/t1',
+      }),
+    ).toBe(
+      'Pixel Barber: How was your cut at Osu Branch? Rate your visit: https://app.example/tickets/t1',
     );
   });
 });

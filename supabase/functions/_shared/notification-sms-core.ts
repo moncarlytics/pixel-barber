@@ -15,6 +15,8 @@ const SENDABLE_TICKET_STATES: Record<string, ReadonlySet<string>> = {
   your_turn: new Set(['called', 'grace_period']),
   // Released as a no-show and not since rejoined/changed.
   ticket_released: new Set(['no_show']),
+  // The visit is done and not yet rated.
+  feedback_request: new Set(['completed']),
 };
 /** Appointment statuses in which a reminder still makes sense. */
 const SENDABLE_APPOINTMENT_STATES: ReadonlySet<string> = new Set(['scheduled', 'checked_in']);
@@ -28,6 +30,7 @@ export const SMS_NOTIFICATION_TYPES = [
   'ticket_released',
   'appointment_reminder_day',
   'appointment_reminder_hour',
+  'feedback_request',
 ] as const;
 export type SmsNotificationType = (typeof SMS_NOTIFICATION_TYPES)[number];
 export const DISPATCH_BATCH_SIZE = 50;
@@ -69,6 +72,8 @@ export interface ClaimedNotification {
   /** The customer's push switch and saved devices (empty array when none). */
   push_enabled?: boolean | null;
   push_subscriptions?: PushTarget[] | null;
+  /** feedback_request only: whether the visit has already been rated. */
+  ticket_has_feedback?: boolean | null;
 }
 
 /** A ticket notification whose ticket has moved on, or a reminder whose appointment is no longer
@@ -81,6 +86,7 @@ function isStale(n: ClaimedNotification): boolean {
     return Date.parse(n.appointment_slot) !== Date.parse(n.payload_slot);
   }
   const sendableStates = SENDABLE_TICKET_STATES[n.notification_type];
+  if (n.notification_type === 'feedback_request' && n.ticket_has_feedback === true) return true;
   return !n.ticket_id || !n.ticket_state || !sendableStates?.has(n.ticket_state);
 }
 
@@ -179,6 +185,8 @@ export function buildNotificationSms(
       return `Pixel Barber: Reminder, your appointment at ${input.branchName} is tomorrow at ${formatReminderTime(input.slot ?? '')}.`;
     case 'appointment_reminder_hour':
       return `Pixel Barber: Your appointment at ${input.branchName} is today at ${formatReminderTime(input.slot ?? '')}, in about an hour.`;
+    case 'feedback_request':
+      return `Pixel Barber: How was your cut at ${input.branchName}? Rate your visit: ${input.link}`;
   }
 }
 

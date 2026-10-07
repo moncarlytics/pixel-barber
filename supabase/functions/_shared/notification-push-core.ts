@@ -79,6 +79,8 @@ export function buildPushPayload(type: SmsNotificationType, n: ClaimedNotificati
         url: appointmentUrl,
         body: `Your appointment at ${branch} is today at ${formatReminderTime(n.appointment_slot ?? '')}, in about an hour.`,
       };
+    case 'feedback_request':
+      return { ...base, url: ticketUrl, body: `How was your cut at ${branch}? Tap to rate.` };
   }
 }
 
