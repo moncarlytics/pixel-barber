@@ -244,6 +244,7 @@ export async function cleanupAppointmentFixture(f: AppointmentFixture) {
     .in('branch_id', branchIds);
   const ticketIds = (tickets ?? []).map((t) => t.id);
   if (ticketIds.length > 0) {
+    await admin.from('feedback').delete().in('ticket_id', ticketIds);
     await admin.from('queue_events').delete().in('ticket_id', ticketIds);
     await admin.from('notifications').delete().in('related_ticket_id', ticketIds);
     await admin.from('queue_tickets').delete().in('id', ticketIds);

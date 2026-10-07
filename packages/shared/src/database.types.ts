@@ -1637,6 +1637,18 @@ export type Database = {
           status: Database['public']['Enums']['appointment_status'];
         }[];
       };
+      list_my_feedback: {
+        Args: never;
+        Returns: {
+          id: string;
+          ticket_id: string;
+          created_at: string;
+          branch_name: string;
+          barber_name: string;
+          overall_rating: number;
+          comment: string | null;
+        }[];
+      };
       list_staff_accounts: {
         Args: never;
         Returns: {
@@ -1682,6 +1694,19 @@ export type Database = {
       set_barber_weekly_hours: {
         Args: { p_barber_id: string; p_days: Json };
         Returns: undefined;
+      };
+      submit_feedback: {
+        Args: {
+          p_ticket_id: string;
+          p_overall: number;
+          p_service_quality?: number | null;
+          p_barber_professionalism?: number | null;
+          p_waiting_experience?: number | null;
+          p_cleanliness?: number | null;
+          p_value?: number | null;
+          p_comment?: string | null;
+        };
+        Returns: string;
       };
       staff_book_appointment: {
         Args: {
