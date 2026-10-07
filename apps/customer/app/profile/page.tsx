@@ -6,7 +6,12 @@ import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, AVATAR_LIBRARY } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
 import { sessionEndedLoginPath } from '../login/nextPath';
-import { enablePush, disablePush } from '../push/pushClient';
+import {
+  enablePush,
+  disablePush,
+  currentPushSubscription,
+  isThisDeviceSaved,
+} from '../push/pushClient';
 
 type Customer = Database['public']['Tables']['customers']['Row'];
 type Branch = Database['public']['Tables']['branches']['Row'];
@@ -18,6 +23,7 @@ export default function ProfilePage() {
   const supabase = createBrowserSupabaseClient();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [pushOff, setPushOff] = useState(false);
+  const [deviceSaved, setDeviceSaved] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +41,9 @@ export default function ProfilePage() {
       .select('*')
       .eq('auth_user_id', userId)
       .single();
+    const subscription = await currentPushSubscription().catch(() => null);
+    const savedHere = subscription ? await isThisDeviceSaved(supabase, subscription) : false;
+    setDeviceSaved(savedHere);
     setCustomer(customerRow ?? null);
 
     const { data: branchRows } = await supabase.from('branches').select('*').order('name');
@@ -156,16 +165,18 @@ export default function ProfilePage() {
         <label>
           <input
             type="checkbox"
-            checked={customer.push_enabled}
+            checked={customer.push_enabled && deviceSaved}
             onChange={async (e) => {
               const checked = e.target.checked;
               if (checked) {
                 const result = await enablePush(supabase);
-                setCustomer({ ...customer, push_enabled: result === 'enabled' });
+                setCustomer((c) => c && { ...c, push_enabled: result === 'enabled' });
+                setDeviceSaved(result === 'enabled');
                 setPushOff(result !== 'enabled');
               } else {
                 await disablePush(supabase);
-                setCustomer({ ...customer, push_enabled: false });
+                setCustomer((c) => c && { ...c, push_enabled: false });
+                setDeviceSaved(false);
                 setPushOff(false);
               }
             }}

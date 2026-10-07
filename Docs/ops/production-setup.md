@@ -27,6 +27,8 @@ Supabase secrets set directly on both projects (not in the env files): `VAPID_KE
 in git-ignored `supabase/.secrets/vapid.json`) and `VAPID_SUBJECT`
 (`https://pixel-barber-customer.vercel.app`):
 `npx supabase secrets set VAPID_KEYS_JSON="$(cat supabase/.secrets/vapid.json)" VAPID_SUBJECT=https://pixel-barber-customer.vercel.app --project-ref <ref>`.
+Or in the dashboard: Supabase dashboard, the project, Edge Functions, Secrets, then add `VAPID_KEYS_JSON`
+(paste the whole contents of `supabase/.secrets/vapid.json`) and `VAPID_SUBJECT`.
 The public half is in `apps/customer/app/push/vapidPublicKey.ts`; replacing the key pair invalidates
 every saved device.
 

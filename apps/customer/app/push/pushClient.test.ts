@@ -8,6 +8,7 @@ const base = {
   hasPushManager: true,
   hasNotification: true,
   standalone: false,
+  maxTouchPoints: 0,
 };
 
 describe('detectPushSupport', () => {
@@ -32,6 +33,29 @@ describe('detectPushSupport', () => {
         standalone: true,
       }),
     ).toBe('supported');
+  });
+  it('treats iPadOS Safari (Macintosh UA with touch) like an iPad', () => {
+    expect(
+      detectPushSupport({
+        ...base,
+        userAgent:
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15',
+        hasPushManager: false,
+        hasNotification: false,
+        maxTouchPoints: 5,
+      }),
+    ).toBe('ios-install-needed');
+  });
+  it('does not treat a real Mac as an iPad', () => {
+    expect(
+      detectPushSupport({
+        ...base,
+        userAgent:
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15',
+        hasPushManager: false,
+        maxTouchPoints: 0,
+      }),
+    ).toBe('unsupported');
   });
   it('is unsupported elsewhere without push', () => {
     expect(detectPushSupport({ ...base, hasPushManager: false })).toBe('unsupported');

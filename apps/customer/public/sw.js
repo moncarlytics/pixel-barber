@@ -29,10 +29,13 @@ self.addEventListener('notificationclick', (event) => {
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of windows) {
-        if ('navigate' in client) {
+        if (!('navigate' in client)) continue;
+        try {
           await client.focus();
           await client.navigate(url);
           return;
+        } catch {
+          // try the next window; fall through to openWindow if none works
         }
       }
       await self.clients.openWindow(url);

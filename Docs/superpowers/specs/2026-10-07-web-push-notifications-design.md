@@ -159,3 +159,14 @@ is pending.
 Configurable "10 and 5 minutes before your turn" pushes (`push_lead_minutes_*`); location-based
 "leave now" prompts (with Maps); staff notifications; delivery/read receipts beyond the push service
 accepting the message; rich notifications (images, action buttons).
+
+## Amendments (implementation)
+
+- The VAPID secrets are `VAPID_KEYS_JSON` (a JWK key pair, as the `jsr:@negrel/webpush` library needs)
+  and `VAPID_SUBJECT` = `https://pixel-barber-customer.vercel.app` (an https subject, valid under
+  RFC 8292).
+- The sender pushes only to https endpoints.
+- At most the 10 most recently seen devices per customer get the push.
+- Each push times out after 8 seconds and falls back to SMS.
+- Customers can only read and delete their own subscription rows directly; saving goes through
+  `save_push_subscription`.

@@ -147,3 +147,36 @@ describe('send-notifications push first', () => {
     ]);
   }, 120000);
 });
+
+describe('send-notifications push timeout', () => {
+  it('gives up on a push service that never answers, falls back to SMS and keeps the device', async () => {
+    // httpbin holds the response for 20 s; the sender gives each push 8 s.
+    const slow = 'https://httpbin.org/delay/20';
+    await addDevice(3, slow);
+    const id = await youreNext(3);
+
+    const deadline = Date.now() + 90_000;
+    let row: { channel: string; status: string; failed_reason: string | null } | null = null;
+    while (Date.now() < deadline) {
+      await callFunction('send-notifications', {}, serviceRoleKey());
+      const { data } = await f.admin
+        .from('notifications')
+        .select('channel, status, failed_reason')
+        .eq('id', id)
+        .single();
+      row = data;
+      if (row && row.status !== 'pending') break;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    expect(row!.channel).toBe('sms');
+    expect(row!.status).toBe('failed');
+    expect(['not_allowlisted', 'sms_disabled']).toContain(row!.failed_reason);
+
+    // A timeout is not "gone": the device stays.
+    const { data: left } = await f.admin
+      .from('push_subscriptions')
+      .select('endpoint')
+      .eq('customer_id', f.customers[3].customerId);
+    expect(left).toEqual([{ endpoint: `${slow}?t=${f.suffix}-3` }]);
+  }, 150000);
+});

@@ -1,7 +1,7 @@
 'use client';
 
 // "Turn on notifications" offer for this device (web push spec, Section 1): shown when the browser
-// supports push, permission isn't denied and this device has no subscription yet; on an iPhone
+// supports push, permission isn't denied and this device has no subscription saved for this customer; on an iPhone
 // outside the Home Screen it shows the Add-to-Home-Screen hint instead.
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -11,6 +11,7 @@ import {
   currentPushSubscription,
   detectPushSupport,
   enablePush,
+  isThisDeviceSaved,
 } from './pushClient';
 
 type BannerState = 'hidden' | 'offer' | 'ios' | 'off';
@@ -30,21 +31,25 @@ export default function PushBanner() {
       });
     } else if (support === 'supported' && Notification.permission !== 'denied') {
       currentPushSubscription()
-        .then((subscription) => {
-          if (!cancelled && !subscription) setState('offer');
+        .then(async (subscription) => {
+          const saved = subscription ? await isThisDeviceSaved(supabase, subscription) : false;
+          if (!cancelled && !saved) setState('offer');
         })
         .catch(() => {});
     }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [supabase]);
 
   async function turnOn() {
     setBusy(true);
-    const result = await enablePush(supabase);
-    setBusy(false);
-    setState(result === 'enabled' || result === 'denied' ? 'hidden' : 'off');
+    try {
+      const result = await enablePush(supabase);
+      setState(result === 'enabled' || result === 'denied' ? 'hidden' : 'off');
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (state === 'hidden') return null;

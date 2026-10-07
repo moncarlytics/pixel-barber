@@ -3,7 +3,7 @@
 // Deno-only (jsr import), so it is exercised by the deployed-function test, not Vitest.
 import * as webpush from 'jsr:@negrel/webpush@0.5.0';
 import type { PushTarget } from './notification-sms-core.ts';
-import type { PushPayload } from './notification-push-core.ts';
+import { PUSH_TIMEOUT_MS, type PushPayload } from './notification-push-core.ts';
 
 export interface PushConfig {
   /** JSON of { publicKey: JsonWebKey, privateKey: JsonWebKey } (secret VAPID_KEYS_JSON). */
@@ -39,12 +39,48 @@ function applicationServer(config: PushConfig): Promise<webpush.ApplicationServe
   return serverPromise;
 }
 
-/** 'gone' = the push service says this subscription no longer exists (404/410): delete it. */
+function endpointOrigin(endpoint: string): string {
+  try {
+    return new URL(endpoint).origin;
+  } catch {
+    return 'invalid-endpoint';
+  }
+}
+
+interface SendOptions {
+  ttl: number;
+  urgency: 'high' | 'normal';
+}
+
+/** 'gone' = the push service says this subscription no longer exists (404/410): delete it.
+ * The whole send is raced against PUSH_TIMEOUT_MS; a timeout is 'failed' (SMS fallback), not 'gone'. */
 export async function sendWebPush(
   config: PushConfig,
   target: PushTarget,
   payload: PushPayload,
-  options: { ttl: number; urgency: 'high' | 'normal' },
+  options: SendOptions,
+): Promise<PushResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<PushResult>((resolve) => {
+    timer = setTimeout(() => {
+      console.error('send-notifications: push timed out', {
+        origin: endpointOrigin(target.endpoint),
+      });
+      resolve('failed');
+    }, PUSH_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([deliver(config, target, payload, options), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function deliver(
+  config: PushConfig,
+  target: PushTarget,
+  payload: PushPayload,
+  options: SendOptions,
 ): Promise<PushResult> {
   try {
     const server = await applicationServer(config);
@@ -61,7 +97,10 @@ export async function sendWebPush(
     if (error instanceof webpush.PushMessageError) {
       const status = error.response.status;
       if (status === 404 || status === 410) return 'gone';
-      console.error('send-notifications: push rejected', { status, endpoint: target.endpoint });
+      console.error('send-notifications: push rejected', {
+        status,
+        origin: endpointOrigin(target.endpoint),
+      });
     } else {
       console.error('send-notifications: push error', { error: String(error) });
     }

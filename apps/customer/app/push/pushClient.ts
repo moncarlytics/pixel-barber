@@ -13,12 +13,17 @@ export interface PushEnv {
   hasNotification: boolean;
   /** Running as an installed (Home Screen) app. */
   standalone: boolean;
+  /** navigator.maxTouchPoints (iPadOS Safari reports a Macintosh user agent but has touch). */
+  maxTouchPoints: number;
 }
 
 export function detectPushSupport(env: PushEnv): PushSupport {
   if (env.hasServiceWorker && env.hasPushManager && env.hasNotification) return 'supported';
   // iPhone/iPad Safari only exposes push to apps added to the Home Screen.
-  if (/iPhone|iPad|iPod/.test(env.userAgent) && !env.standalone) return 'ios-install-needed';
+  const isIos =
+    /iPhone|iPad|iPod/.test(env.userAgent) ||
+    (env.userAgent.includes('Macintosh') && env.maxTouchPoints > 1);
+  if (isIos && !env.standalone) return 'ios-install-needed';
   return 'unsupported';
 }
 
@@ -31,6 +36,7 @@ export function browserPushEnv(): PushEnv {
     standalone:
       (navigator as Navigator & { standalone?: boolean }).standalone === true ||
       window.matchMedia('(display-mode: standalone)').matches,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
   };
 }
 
@@ -56,9 +62,9 @@ export type EnableResult = 'enabled' | 'denied' | 'unsupported' | 'failed';
 /** Asks permission, registers the service worker, subscribes and saves the subscription. */
 export async function enablePush(supabase: SupabaseClient<Database>): Promise<EnableResult> {
   if (detectPushSupport(browserPushEnv()) !== 'supported') return 'unsupported';
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return 'denied';
   try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return 'denied';
     await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     const registration = await navigator.serviceWorker.ready;
     const subscription =
@@ -86,4 +92,18 @@ export async function disablePush(supabase: SupabaseClient<Database>): Promise<v
   if (!subscription) return;
   await supabase.rpc('remove_push_subscription', { p_endpoint: subscription.endpoint });
   await subscription.unsubscribe().catch(() => false);
+}
+
+/** Whether this browser subscription is saved for the signed-in customer (RLS limits the select to
+ * their own rows). False on error. */
+export async function isThisDeviceSaved(
+  supabase: SupabaseClient<Database>,
+  subscription: PushSubscription,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('push_subscriptions')
+    .select('endpoint')
+    .eq('endpoint', subscription.endpoint)
+    .limit(1);
+  return !error && (data?.length ?? 0) > 0;
 }

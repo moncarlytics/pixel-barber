@@ -14,9 +14,12 @@ import { sendArkeselSms } from '../_shared/arkesel.ts';
 import {
   PUSH_TTL_SECONDS,
   buildPushPayload,
+  goneEndpoints,
+  pushDelivered,
   pushTargets,
   pushUrgency,
   shouldAttemptPush,
+  smsSentStatus,
 } from '../_shared/notification-push-core.ts';
 import { loadPushConfig, sendWebPush } from '../_shared/web-push.ts';
 import {
@@ -141,7 +144,7 @@ Deno.serve(async (req) => {
           }),
         ),
       );
-      const gone = targets.filter((_, i) => results[i] === 'gone').map((t) => t.endpoint);
+      const gone = goneEndpoints(targets, results);
       if (gone.length > 0) {
         const { error: goneError } = await admin
           .from('push_subscriptions')
@@ -150,7 +153,7 @@ Deno.serve(async (req) => {
         if (goneError)
           console.error('send-notifications: could not delete gone subscriptions', goneError);
       }
-      if (results.includes('ok')) {
+      if (pushDelivered(results)) {
         const { error: pushedError } = await admin
           .from('notifications')
           .update({
@@ -198,7 +201,7 @@ Deno.serve(async (req) => {
       const { error: updateError } = await admin
         .from('notifications')
         .update({
-          status: pushAttempted ? 'fallback_sent' : 'sent',
+          status: smsSentStatus(pushAttempted),
           sent_at: new Date().toISOString(),
           failed_reason: null,
           dispatch_claimed_at: null,

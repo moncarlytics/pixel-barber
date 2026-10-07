@@ -115,3 +115,63 @@ describe('remove_push_subscription', () => {
     expect(await rowFor(endpoint())).toBeNull();
   });
 });
+
+describe('direct table access', () => {
+  const own = () => `${endpoint()}/own`;
+
+  it('refuses direct inserts and updates but allows reading and deleting own rows', async () => {
+    const client = f.customers[0].client;
+    const insert = await client.from('push_subscriptions').insert({
+      customer_id: f.customers[0].customerId,
+      endpoint: `${own()}/direct`,
+      p256dh_key: 'p',
+      auth_key: 'a',
+    });
+    expect(insert.error).not.toBeNull();
+    expect(await rowFor(`${own()}/direct`)).toBeNull();
+
+    const saved = await client.rpc('save_push_subscription', {
+      p_endpoint: own(),
+      p_p256dh: 'p256-own',
+      p_auth: 'auth-own',
+      p_user_agent: 'x',
+    });
+    expect(saved.error).toBeNull();
+
+    const update = await client
+      .from('push_subscriptions')
+      .update({ p256dh_key: 'tampered' })
+      .eq('endpoint', own())
+      .select();
+    expect(update.data ?? []).toHaveLength(0);
+    expect((await rowFor(own()))!.p256dh_key).toBe('p256-own');
+
+    const read = await client.from('push_subscriptions').select('endpoint').eq('endpoint', own());
+    expect(read.data).toEqual([{ endpoint: own() }]);
+    const otherRead = await f.customers[1].client
+      .from('push_subscriptions')
+      .select('endpoint')
+      .eq('endpoint', own());
+    expect(otherRead.data).toEqual([]);
+
+    const del = await client.from('push_subscriptions').delete().eq('endpoint', own()).select();
+    expect(del.error).toBeNull();
+    expect(del.data).toHaveLength(1);
+    expect(await rowFor(own())).toBeNull();
+  });
+
+  it('still saves and removes through the functions', async () => {
+    const client = f.customers[0].client;
+    const saved = await client.rpc('save_push_subscription', {
+      p_endpoint: `${own()}/rpc`,
+      p_p256dh: 'p',
+      p_auth: 'a',
+      p_user_agent: 'x',
+    });
+    expect(saved.error).toBeNull();
+    expect(await rowFor(`${own()}/rpc`)).not.toBeNull();
+    const removed = await client.rpc('remove_push_subscription', { p_endpoint: `${own()}/rpc` });
+    expect(removed.error).toBeNull();
+    expect(await rowFor(`${own()}/rpc`)).toBeNull();
+  });
+});

@@ -4,11 +4,15 @@
 // and tap target per type, urgency.
 import { describe, expect, it } from 'vitest';
 import {
+  PUSH_TIMEOUT_MS,
   PUSH_TTL_SECONDS,
   buildPushPayload,
+  goneEndpoints,
+  pushDelivered,
   pushTargets,
   pushUrgency,
   shouldAttemptPush,
+  smsSentStatus,
 } from '../../supabase/functions/_shared/notification-push-core';
 import type { ClaimedNotification } from '../../supabase/functions/_shared/notification-sms-core';
 
@@ -126,5 +130,31 @@ describe('pushUrgency and TTL', () => {
   });
   it('expires after 10 minutes', () => {
     expect(PUSH_TTL_SECONDS).toBe(600);
+  });
+});
+
+describe('push result decisions', () => {
+  it('times out a push after 8 seconds', () => {
+    expect(PUSH_TIMEOUT_MS).toBe(8000);
+  });
+  it('is not delivered when every device failed, so SMS goes out as fallback_sent', () => {
+    expect(pushDelivered(['failed', 'failed'])).toBe(false);
+    expect(pushDelivered(['gone', 'failed'])).toBe(false);
+    expect(pushDelivered([])).toBe(false);
+    expect(smsSentStatus(true)).toBe('fallback_sent');
+  });
+  it('is delivered when any device accepted the push', () => {
+    expect(pushDelivered(['failed', 'ok'])).toBe(true);
+  });
+  it('records a plain sent when no push was attempted', () => {
+    expect(smsSentStatus(false)).toBe('sent');
+  });
+  it('lists only gone endpoints', () => {
+    const targets = [
+      { endpoint: 'https://a', p256dh: 'p', auth: 'a' },
+      { endpoint: 'https://b', p256dh: 'p', auth: 'a' },
+      { endpoint: 'https://c', p256dh: 'p', auth: 'a' },
+    ];
+    expect(goneEndpoints(targets, ['gone', 'ok', 'failed'])).toEqual(['https://a']);
   });
 });
