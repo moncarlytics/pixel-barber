@@ -1517,6 +1517,8 @@ export type Database = {
           appointment_status: Database['public']['Enums']['appointment_status'] | null;
           appointment_slot: string | null;
           payload_slot: string | null;
+          push_enabled: boolean | null;
+          push_subscriptions: Json;
         }[];
       };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };
@@ -1664,12 +1666,17 @@ export type Database = {
         Args: { p_branch_id: string; p_barber_id: string };
         Returns: undefined;
       };
+      remove_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
       reschedule_appointment: {
         Args: { p_appointment_id: string; p_slot_start: string };
         Returns: undefined;
       };
       reset_barber_schedule_day: {
         Args: { p_barber_id: string; p_date: string };
+        Returns: undefined;
+      };
+      save_push_subscription: {
+        Args: { p_endpoint: string; p_p256dh: string; p_auth: string; p_user_agent: string };
         Returns: undefined;
       };
       set_barber_weekly_hours: {
