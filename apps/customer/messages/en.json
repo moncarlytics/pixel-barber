@@ -1,4 +1,10 @@
 {
+  "Nav": {
+    "branches": "Branches",
+    "tickets": "My Tickets",
+    "profile": "Profile",
+    "logOut": "Log out"
+  },
   "Home": {
     "title": "Pixel Barber",
     "loading": "Loading branches…"
