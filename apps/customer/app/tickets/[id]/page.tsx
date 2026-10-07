@@ -9,6 +9,7 @@ import {
   updateTicketWithVersion,
 } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
+import PushBanner from '../../push/PushBanner';
 
 type Ticket = Database['public']['Tables']['queue_tickets']['Row'];
 type Customer = Database['public']['Tables']['customers']['Row'];
@@ -114,6 +115,7 @@ export default function TicketTrackingPage() {
     <main>
       {error && <p role="alert">{error}</p>}
       <h1>{ticket.ticket_number}</h1>
+      {isActive && <PushBanner />}
 
       {/* PRD 18: the avatar/animation visualizes state already shown in text below -- never the
           other way around. A reduced-motion media query (globals.css) disables the CSS transition

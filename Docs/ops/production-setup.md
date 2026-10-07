@@ -23,6 +23,13 @@ Secrets files — variable **names** (never commit values):
 - `production.env`: the same five (production values; its own hook secret), plus `CUSTOMER_APP_URL`,
   `STAFF_APP_URL`
 
+Supabase secrets set directly on both projects (not in the env files): `VAPID_KEYS_JSON` (the JSON
+in git-ignored `supabase/.secrets/vapid.json`) and `VAPID_SUBJECT`
+(`https://pixel-barber-customer.vercel.app`):
+`npx supabase secrets set VAPID_KEYS_JSON="$(cat supabase/.secrets/vapid.json)" VAPID_SUBJECT=https://pixel-barber-customer.vercel.app --project-ref <ref>`.
+The public half is in `apps/customer/app/push/vapidPublicKey.ts`; replacing the key pair invalidates
+every saved device.
+
 `supabase/config.toml` reads `site_url` and the send-SMS hook `uri` from `AUTH_SITE_URL` /
 `SEND_SMS_HOOK_URI`, so **source the right file before every CLI command**:
 
@@ -132,12 +139,25 @@ Then the checks:
 
 If `config.toml` gains a new per-environment value, add it to **both** secrets files.
 
-## 4. If production is paused
+## 4. Manual push check (after promoting push)
+
+1. On an Android phone (Chrome) open https://pixel-barber-customer.vercel.app and log in. On an
+   iPhone: open it in Safari, tap Share → Add to Home Screen, then open Pixel Barber from the Home
+   Screen and log in.
+2. Profile → switch on **Push notifications** → allow notifications when the phone asks.
+3. Put a ticket for that customer second in line (join the queue behind someone, or ask staff).
+4. Lock the phone. A "You're next at …" notification should arrive within about a minute; tapping
+   it opens the ticket.
+5. If nothing arrives: Profile → switch off and on again; check
+   `select channel, status, failed_reason from notifications order by created_at desc limit 5;` —
+   `channel = 'push', status = 'sent'` means the push service accepted it.
+
+## 5. If production is paused
 
 The free plan pauses a project after about a week without use. Restore it from the dashboard (or
 MCP `restore_project`); data is kept. Wait for `ACTIVE_HEALTHY` before running anything.
 
-## 5. Go-live checklist (before real customers)
+## 6. Go-live checklist (before real customers)
 
 1. Arkesel sender ID approved; set `ARKESEL_SENDER_ID` on production to the approved name.
 2. Upgrade production to Supabase Pro (no pausing, daily backups).

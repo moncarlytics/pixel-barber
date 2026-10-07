@@ -9,6 +9,7 @@ import type { Database } from '@pixel-barber/shared';
 import SlotPicker, { formatSlotDate, formatSlotTime } from '../SlotPicker';
 import { appointmentErrorKey } from '../appointmentErrors';
 import { sessionEndedLoginPath } from '../../login/nextPath';
+import PushBanner from '../../push/PushBanner';
 
 type Appointment = Database['public']['Tables']['appointments']['Row'];
 type CancelReason = Database['public']['Enums']['cancel_reason'];
@@ -204,6 +205,9 @@ export default function AppointmentDetailPage() {
   return (
     <main>
       <h1>{searchParams.get('booked') ? t('bookedTitle') : t('detailTitle')}</h1>
+      {(appointment.status === 'scheduled' || appointment.status === 'checked_in') && (
+        <PushBanner />
+      )}
       {error && <p role="alert">{error}</p>}
       <p>{t('dateLabel', { date: formatSlotDate(appointment.scheduled_start) })}</p>
       <p>{t('timeLabel', { time: formatSlotTime(appointment.scheduled_start) })}</p>
