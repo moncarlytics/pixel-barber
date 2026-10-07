@@ -222,5 +222,11 @@
     "backButton": "Back",
     "conflictMessage": "This ticket was just updated — showing the latest state.",
     "actionFailed": "Something went wrong. Please try again."
+  },
+  "Push": {
+    "bannerText": "Get a notification when it's your turn.",
+    "turnOn": "Turn on",
+    "iosHint": "To get notifications on iPhone, tap Share, then Add to Home Screen.",
+    "off": "Push notifications are off — you'll still get SMS updates."
   }
 }

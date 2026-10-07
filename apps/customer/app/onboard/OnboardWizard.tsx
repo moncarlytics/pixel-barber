@@ -9,6 +9,7 @@ import {
   createBrowserSupabaseClient,
   normalizeGhanaPhone,
 } from '@pixel-barber/shared';
+import { enablePush, disablePush } from '../push/pushClient';
 
 type Step = 'phone' | 'otp' | 'password' | 'avatar' | 'notifications' | 'welcome';
 
@@ -227,11 +228,10 @@ export default function OnboardWizard() {
               type="checkbox"
               checked={pushEnabled}
               onChange={async (e) => {
-                const checked = e.target.checked;
-                if (checked && typeof window !== 'undefined' && 'Notification' in window) {
-                  const permission = await Notification.requestPermission();
-                  setPushEnabled(permission === 'granted');
+                if (e.target.checked) {
+                  setPushEnabled((await enablePush(supabase)) === 'enabled');
                 } else {
+                  await disablePush(supabase);
                   setPushEnabled(false);
                 }
               }}

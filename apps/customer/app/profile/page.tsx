@@ -6,15 +6,18 @@ import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient, AVATAR_LIBRARY } from '@pixel-barber/shared';
 import type { Database } from '@pixel-barber/shared';
 import { sessionEndedLoginPath } from '../login/nextPath';
+import { enablePush, disablePush } from '../push/pushClient';
 
 type Customer = Database['public']['Tables']['customers']['Row'];
 type Branch = Database['public']['Tables']['branches']['Row'];
 
 export default function ProfilePage() {
   const t = useTranslations('Profile');
+  const tp = useTranslations('Push');
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [pushOff, setPushOff] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +103,7 @@ export default function ProfilePage() {
   }
 
   async function handleLogout() {
+    await disablePush(supabase);
     await supabase.auth.signOut();
     router.push('/');
   }
@@ -155,16 +159,20 @@ export default function ProfilePage() {
             checked={customer.push_enabled}
             onChange={async (e) => {
               const checked = e.target.checked;
-              if (checked && typeof window !== 'undefined' && 'Notification' in window) {
-                const permission = await Notification.requestPermission();
-                setCustomer({ ...customer, push_enabled: permission === 'granted' });
+              if (checked) {
+                const result = await enablePush(supabase);
+                setCustomer({ ...customer, push_enabled: result === 'enabled' });
+                setPushOff(result !== 'enabled');
               } else {
+                await disablePush(supabase);
                 setCustomer({ ...customer, push_enabled: false });
+                setPushOff(false);
               }
             }}
           />
           {t('enablePush')}
         </label>
+        {pushOff && <p>{tp('off')}</p>}
         <label>
           <input
             type="checkbox"
