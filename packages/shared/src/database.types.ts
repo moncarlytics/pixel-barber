@@ -822,6 +822,8 @@ export type Database = {
           gemini_themes: string[] | null;
           id: string;
           overall_rating: number;
+          seen_at: string | null;
+          seen_by_staff_id: string | null;
           service_quality_rating: number | null;
           ticket_id: string;
           value_rating: number | null;
@@ -839,6 +841,8 @@ export type Database = {
           gemini_themes?: string[] | null;
           id?: string;
           overall_rating: number;
+          seen_at?: string | null;
+          seen_by_staff_id?: string | null;
           service_quality_rating?: number | null;
           ticket_id: string;
           value_rating?: number | null;
@@ -856,6 +860,8 @@ export type Database = {
           gemini_themes?: string[] | null;
           id?: string;
           overall_rating?: number;
+          seen_at?: string | null;
+          seen_by_staff_id?: string | null;
           service_quality_rating?: number | null;
           ticket_id?: string;
           value_rating?: number | null;
@@ -1492,6 +1498,10 @@ export type Database = {
         Args: { p_branch_service_id: string; p_barber_id: string | null; p_slot_start: string };
         Returns: string;
       };
+      branch_feedback_summary: {
+        Args: { p_branch_id: string };
+        Returns: { average_rating: number | null; rating_count: number }[];
+      };
       cancel_appointment: {
         Args: {
           p_appointment_id: string;
@@ -1617,6 +1627,25 @@ export type Database = {
         Args: { p_branch_id: string; p_date: string };
         Returns: Database['public']['Functions']['get_branch_appointment']['Returns'];
       };
+      list_branch_feedback: {
+        Args: { p_branch_id: string };
+        Returns: {
+          id: string;
+          created_at: string;
+          customer_first_name: string;
+          barber_name: string;
+          service_name: string;
+          overall_rating: number;
+          service_quality_rating: number | null;
+          barber_professionalism_rating: number | null;
+          waiting_experience_rating: number | null;
+          cleanliness_rating: number | null;
+          value_rating: number | null;
+          comment: string | null;
+          seen_at: string | null;
+          seen_by_name: string | null;
+        }[];
+      };
       list_manageable_barbers: {
         Args: never;
         Returns: {
@@ -1664,6 +1693,8 @@ export type Database = {
           is_self: boolean;
         }[];
       };
+      list_unseen_low_feedback_count: { Args: never; Returns: number };
+      mark_feedback_seen: { Args: { p_feedback_id: string }; Returns: undefined };
       next_ticket_number: { Args: { p_branch_id: string }; Returns: string };
       preview_wait_estimate: {
         Args: { p_branch_service_id: string; p_barber_id: string | null };
