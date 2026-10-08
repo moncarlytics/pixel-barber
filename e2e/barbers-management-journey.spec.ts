@@ -273,7 +273,13 @@ test.describe('barbers management journey', () => {
     await customerPage.goto(`${CUSTOMER_BASE_URL}/book?branch=${branchId}`);
     // Scoped to <main> and using Enter: Next.js dev mode's Dev Tools badge sits outside <main>
     // and intercepts pointer clicks (see e2e/barber-assignment-journey.spec.ts).
-    await customerPage.locator('main').getByRole('button').first().press('Enter');
+    // The branch's only service (the Join Now/Schedule toggle buttons are not list items).
+    await customerPage
+      .locator('main')
+      .getByRole('listitem')
+      .getByRole('button')
+      .first()
+      .press('Enter');
     await customerPage.getByRole('button', { name: 'Any available' }).press('Enter');
     await customerPage.getByRole('button', { name: 'Join Now' }).press('Enter');
     await customerPage.waitForURL(/\/tickets\//, { timeout: 15000 });
