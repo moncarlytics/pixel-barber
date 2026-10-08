@@ -270,7 +270,6 @@
     "empty": "No appointments on this day.",
     "loadFailed": "Couldn't load appointments.",
     "noBranches": "You don't manage any branches.",
-    "noAccess": "You don't have access to feedback.",
     "noServices": "This branch has no active services.",
     "existingCustomerNote": "If this phone number belongs to an existing customer, the appointment is booked under their saved name.",
     "statuses": {
@@ -351,6 +350,7 @@
     "empty": "No feedback yet for this branch.",
     "loadFailed": "Couldn't load feedback.",
     "noBranches": "You don't manage any branches.",
+    "noAccess": "You don't have access to feedback.",
     "markSeen": "Mark as seen",
     "seenBy": "Seen by {name} on {date}",
     "stars": "{count, plural, one {# star} other {# stars}}",
