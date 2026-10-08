@@ -11,8 +11,13 @@ export default function Home() {
   // null until the session check finishes, so "Log in" doesn't flash for a signed-in user.
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
 
+  const [canViewReports, setCanViewReports] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(data.session !== null));
+    supabase
+      .rpc('has_capability', { cap: 'view_branch_reports' })
+      .then(({ data }) => setCanViewReports(data === true));
   }, [supabase]);
 
   return (
@@ -24,6 +29,7 @@ export default function Home() {
       <Link href="/settings/barbers">{t('barbersLink')}</Link>
       <Link href="/settings/staff">{t('staffLink')}</Link>
       <Link href="/appointments">{t('appointmentsLink')}</Link>
+      {canViewReports && <Link href="/feedback">{t('feedbackLink')}</Link>}
     </main>
   );
 }

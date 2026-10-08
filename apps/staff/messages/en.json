@@ -4,7 +4,8 @@
     "logIn": "Log in",
     "barbersLink": "Barbers",
     "staffLink": "Staff & Roles",
-    "appointmentsLink": "Appointments"
+    "appointmentsLink": "Appointments",
+    "feedbackLink": "Feedback"
   },
   "Header": {
     "logOut": "Log out"
@@ -339,5 +340,20 @@
       "notFound": "We couldn't find this appointment.",
       "generic": "Something went wrong — please try again."
     }
+  },
+  "Feedback": {
+    "title": "Feedback",
+    "banner": "{count, plural, one {# new low rating} other {# new low ratings}} — View",
+    "branch": "Branch",
+    "summary": "Last 30 days: {average} average from {count} ratings",
+    "summaryNone": "Last 30 days: no ratings yet",
+    "empty": "No feedback yet for this branch.",
+    "loadFailed": "Couldn't load feedback.",
+    "noBranches": "You don't manage any branches.",
+    "markSeen": "Mark as seen",
+    "seenBy": "Seen by {name} on {date}",
+    "stars": "{count, plural, one {# star} other {# stars}}",
+    "details": "Service {service} · Professionalism {professionalism} · Waiting {waiting} · Cleanliness {cleanliness} · Value {value}",
+    "line": "{date} · {customer} · {barber} · {service}"
   }
 }

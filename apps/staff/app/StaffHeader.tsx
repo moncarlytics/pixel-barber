@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { createBrowserSupabaseClient } from '@pixel-barber/shared';
+import { LowRatingBanner } from './feedback/LowRatingBanner';
 
 // Pages someone reaches before they have a staff session: no Log out button there.
 const SIGNED_OUT_PATHS = ['/login', '/invite'];
@@ -36,6 +37,7 @@ export function StaffHeader() {
 
   return (
     <header>
+      <LowRatingBanner />
       <button type="button" onClick={handleLogOut}>
         {t('logOut')}
       </button>
