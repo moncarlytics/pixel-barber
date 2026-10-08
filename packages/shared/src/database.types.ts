@@ -1541,6 +1541,10 @@ export type Database = {
         }[];
       };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };
+      customer_detail: {
+        Args: { p_customer_id: string; p_branch_ids: string[] };
+        Returns: Json;
+      };
       enqueue_appointment_reminders: { Args: { p_now?: string }; Returns: number };
       fill_barber_schedule: {
         Args: { p_barber_id?: string | null };
@@ -1655,6 +1659,15 @@ export type Database = {
           seen_by_name: string | null;
         }[];
       };
+      list_customers: {
+        Args: {
+          p_branch_ids: string[];
+          p_search: string | null;
+          p_group: string | null;
+          p_offset?: number;
+        };
+        Returns: Json;
+      };
       list_manageable_barbers: {
         Args: never;
         Returns: {
@@ -1730,6 +1743,10 @@ export type Database = {
       save_push_subscription: {
         Args: { p_endpoint: string; p_p256dh: string; p_auth: string; p_user_agent: string };
         Returns: undefined;
+      };
+      send_customer_message: {
+        Args: { p_customer_id: string; p_branch_id: string; p_text: string };
+        Returns: string;
       };
       set_long_wait_warning: {
         Args: { p_branch_id: string; p_minutes: number };
