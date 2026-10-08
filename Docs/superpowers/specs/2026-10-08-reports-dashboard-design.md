@@ -1,7 +1,7 @@
 # Design: Today Dashboard and Reports
 
 **Date:** 2026-10-08
-**Status:** Approved in brainstorming, awaiting written-spec review
+**Status:** Approved (spec review 2026-10-08: Excel + PDF downloads added)
 **Origin:** PRD sections 26 (staff operations dashboard), 30 (reporting), 31 (KPIs), 32 (RBAC);
 App Flow 8.3 (branch dashboard), 8.4 (business-wide dashboard), 8.13 (reports); implementation plan
 Phase 8 (reporting subset).
@@ -149,6 +149,24 @@ date in `Africa/Accra`. Returns:
 - `Download CSV` under each table (Day by day, Busiest hours, Barbers, Services, Cancellation
   reasons, Branch comparison); file name `pixel-barber-{table}-{from}-{to}.csv`; header row with
   the column labels; values unformatted (plain numbers, ISO dates, empty for null).
+- `Download Excel` and `Download PDF` at the top of the report, beside the filters, shown once a
+  report has loaded. Both are built in the browser from the report already on screen (no server
+  call), with their libraries loaded only on click (dynamic `import()`):
+  - **Excel** (`write-excel-file`, MIT): file `pixel-barber-report-{branch}-{from}-{to}.xlsx`, where
+    `{branch}` is the branch code or `all`. Sheets: `Summary` (first rows: `Branch`, `From`, `To`,
+    `Generated` — then one row per summary metric: label, value), `Day by day`, `Busiest hours`,
+    `Barbers`, `Services`, `Cancellation reasons`, and `Branch comparison` (all branches only). Each
+    table sheet has a bold header row with the same column labels as the page; numbers are numeric
+    cells, dates are ISO date strings, null is an empty cell.
+  - **PDF** (`jspdf` + `jspdf-autotable`, MIT): file `pixel-barber-report-{branch}-{from}-{to}.pdf`,
+    A4 portrait. Title `Pixel Barber report`, then `{branch name} · {from} to {to}` and
+    `Generated {date time}`; then the summary as a two-column table (label, formatted value) and
+    every table in page order, each with its section heading; table headers repeat on each page;
+    values formatted as on the page (`18 min`, `GHS 1,250.00`, `—`), and the takings column header
+    reads `Estimated takings (GHS)`.
+  - Builder functions are pure (report data + labels in, sheet/table definitions out) so they can be
+    unit-tested without the libraries; a thin wrapper hands them to the library and triggers the
+    download. A failure shows `Couldn't create the file. Please try again.`
 - Messages: no permission → `You don't have access to this page.`; `invalid_range` →
   `Pick a range of up to 92 days.`; other errors → `Couldn't load the report.`; no tickets →
   `No visits in this period.`
@@ -160,7 +178,9 @@ date in `Africa/Accra`. Returns:
 - Every new function: `security definer`, `set search_path = public, pg_temp`, explicit revoke/grant
   (`authenticated` only), short error codes.
 - Staff app: `/today`, `/reports`, a CSV helper (`toCsv(headers, rows)` quoting commas, quotes and
-  newlines), Branch Settings field, home page links, `en.json` namespaces `Today` and `Reports`.
+  newlines), Excel and PDF builders + download wrappers, Branch Settings field, home page links,
+  `en.json` namespaces `Today` and `Reports`. New staff-app dependencies: `write-excel-file`,
+  `jspdf`, `jspdf-autotable`.
 
 ### Testing
 
@@ -172,10 +192,13 @@ date in `Africa/Accra`. Returns:
   barber → `not_allowed` for both; branch manager → `not_allowed` for another branch and for
   multiple branches; analyst/owner allowed multi-branch; 93-day range and `from > to` →
   `invalid_range`. `long_wait.alert` true when the seeded waiting tickets exceed the threshold.
-- **Unit:** `toCsv` quoting; minute and money formatting.
+- **Unit:** `toCsv` quoting; minute and money formatting; the Excel builder (sheet names and order,
+  header rows, numeric cells, Branch comparison only for all branches) and the PDF builder (title
+  lines, section headings, formatted values).
 - **E2E:** a branch manager opens Today (counts and long-wait banner visible), opens Reports, picks
-  Custom range, sees the summary and Barbers table, and downloads a CSV (Playwright download event,
-  file starts with the header row).
+  Custom range, sees the summary and Barbers table, and downloads a CSV (file starts with the header
+  row), an Excel file (`.xlsx` name, starts with the ZIP signature `PK`) and a PDF (`.pdf` name,
+  starts with `%PDF`).
 
 ## Out of scope
 
