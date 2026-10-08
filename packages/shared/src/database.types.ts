@@ -598,6 +598,7 @@ export type Database = {
           id: string;
           is_temporarily_closed: boolean;
           latitude: number;
+          long_wait_warning_minutes: number;
           longitude: number;
           max_queue_size: number | null;
           name: string;
@@ -614,6 +615,7 @@ export type Database = {
           id?: string;
           is_temporarily_closed?: boolean;
           latitude: number;
+          long_wait_warning_minutes?: number;
           longitude: number;
           max_queue_size?: number | null;
           name: string;
@@ -630,6 +632,7 @@ export type Database = {
           id?: string;
           is_temporarily_closed?: boolean;
           latitude?: number;
+          long_wait_warning_minutes?: number;
           longitude?: number;
           max_queue_size?: number | null;
           name?: string;
@@ -1502,6 +1505,7 @@ export type Database = {
         Args: { p_branch_id: string };
         Returns: { average_rating: number | null; rating_count: number }[];
       };
+      branch_today: { Args: { p_branch_id: string }; Returns: Json };
       cancel_appointment: {
         Args: {
           p_appointment_id: string;
@@ -1721,6 +1725,10 @@ export type Database = {
       };
       save_push_subscription: {
         Args: { p_endpoint: string; p_p256dh: string; p_auth: string; p_user_agent: string };
+        Returns: undefined;
+      };
+      set_long_wait_warning: {
+        Args: { p_branch_id: string; p_minutes: number };
         Returns: undefined;
       };
       set_barber_weekly_hours: {

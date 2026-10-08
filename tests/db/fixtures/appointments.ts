@@ -268,13 +268,13 @@ export async function cleanupAppointmentFixture(f: AppointmentFixture) {
   await admin.from('services').delete().eq('id', f.serviceId);
 }
 
-/** A signed-in branch_manager/receptionist assigned to `branchId` (assignment made before sign-in,
+/** A signed-in branch_manager/receptionist/analyst assigned to `branchId` (one or several; made before sign-in,
  * so the JWT carries it). */
 export async function createStaffLogin(
   f: AppointmentFixture,
   label: string,
-  role: 'branch_manager' | 'receptionist',
-  branchId: string,
+  role: 'branch_manager' | 'receptionist' | 'analyst',
+  branchId: string | string[],
 ): Promise<{ authUserId: string; staffUserId: string; name: string; client: Client }> {
   const email = `appt-staff-${label}-${f.suffix}@test.pixelbarber.local`;
   const name = `Appt Staff ${label}`;
@@ -290,9 +290,10 @@ export async function createStaffLogin(
     .select('id')
     .single();
   if (staffError) throw staffError;
+  const branchIds = Array.isArray(branchId) ? branchId : [branchId];
   const { error: assignError } = await f.admin
     .from('staff_branch_assignments')
-    .insert({ staff_user_id: staff.id, branch_id: branchId });
+    .insert(branchIds.map((id) => ({ staff_user_id: staff.id, branch_id: id })));
   if (assignError) throw assignError;
   return { authUserId: auth.user.id, staffUserId: staff.id, name, client: await signIn({ email }) };
 }
