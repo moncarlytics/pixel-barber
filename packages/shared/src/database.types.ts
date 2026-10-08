@@ -1505,6 +1505,10 @@ export type Database = {
         Args: { p_branch_id: string };
         Returns: { average_rating: number | null; rating_count: number }[];
       };
+      branch_report: {
+        Args: { p_branch_ids: string[]; p_from: string; p_to: string };
+        Returns: Json;
+      };
       branch_today: { Args: { p_branch_id: string }; Returns: Json };
       cancel_appointment: {
         Args: {
