@@ -25,8 +25,21 @@ beforeAll(async () => {
   f = await createRbacFixture();
 }, 180000);
 afterAll(async () => {
-  await disposeAll();
-  await cleanupRbacFixture(f);
+  let failure: unknown;
+  try {
+    await disposeAll();
+  } catch (e) {
+    failure = e;
+  }
+  try {
+    await cleanupRbacFixture(f);
+  } catch (e) {
+    failure = failure
+      ? new Error(`${msg(failure)}
+and the fixture cleanup failed: ${msg(e)}`)
+      : e;
+  }
+  if (failure) throw failure;
 }, 180000);
 
 const OPS = ['insert', 'update', 'delete'] as const;
@@ -103,11 +116,15 @@ function classify(
   error: { code?: string; message: string } | null,
   what: string,
   passCodes: string[] = [],
-  refuseCodes: string[] = [],
+  refuseErrors: { code: string; message: string }[] = [],
 ): 'ok' | 'refused' {
   if (!error) return 'ok';
   const code = error.code ?? '';
-  if (code === '42501' || refuseCodes.includes(code)) return 'refused';
+  if (
+    code === '42501' ||
+    refuseErrors.some((x) => x.code === code && error.message.includes(x.message))
+  )
+    return 'refused';
   if (passCodes.includes(code)) return 'ok';
   throw new Error(`${what}: unexpected error (${code || 'no code'}) ${error.message}`);
 }
@@ -122,9 +139,9 @@ const client = (role: Role) => f.clients[role] as unknown as Loose;
 
 async function tryInsert(entry: WriteEntry, role: Role, at: At): Promise<boolean> {
   const what = `${nameOf(entry)} insert as ${role} at ${at}`;
-  const { key, value: row } = await cached(entry, 'insert', at, () => entry.probe.insert!(f, at));
+  const { key, value: row } = await cached(entry, 'insert', at, () => entry.probe.insert(f, at));
   const r = await client(role).from(entry.table).insert(row);
-  if (classify(r.error, what, entry.probe.passCodes, entry.probe.refuseCodes) === 'refused')
+  if (classify(r.error, what, entry.probe.passCodes, entry.probe.refuseErrors) === 'refused')
     return false;
   // A stored row is gone from the cache so the next role gets a fresh one.
   if (!r.error) await dispose(key);
@@ -145,6 +162,9 @@ async function tryUpdate(entry: WriteEntry, role: Role, at: At): Promise<boolean
     throw new Error(`${what}: probe invalid, ${t.column} already equals the new value`);
   }
   const after = { ...match, [t.column]: t.value };
+  if ((await count(db, entry.table, after)) !== 0) {
+    throw new Error(`${what}: probe invalid, the success row already exists`);
+  }
   // Registered before the write, so a shared row is put back whatever happens next.
   track(f, async () => {
     const back = await db
@@ -157,7 +177,7 @@ async function tryUpdate(entry: WriteEntry, role: Role, at: At): Promise<boolean
     .from(entry.table)
     .update({ [t.column]: t.value })
     .match(match);
-  if (classify(r.error, what, [], entry.probe.refuseCodes) === 'refused') return false;
+  if (classify(r.error, what, [], entry.probe.refuseErrors) === 'refused') return false;
   const allowed = (await count(db, entry.table, after)) === 1;
   if (allowed) await dispose(key); // the row changed: rebuild for the next role
   return allowed;
@@ -172,7 +192,7 @@ async function tryDelete(entry: WriteEntry, role: Role, at: At): Promise<boolean
   const match = t.match ?? { [entry.key]: t.key };
   if ((await count(db, entry.table, match)) !== 1) throw new Error(`${what}: probe row not found`);
   const r = await client(role).from(entry.table).delete().match(match);
-  if (classify(r.error, what, entry.probe.passCodes, entry.probe.refuseCodes) === 'refused')
+  if (classify(r.error, what, entry.probe.passCodes, entry.probe.refuseErrors) === 'refused')
     return false;
   if (r.error) return true; // stopped by a constraint after row security let it through
   const allowed = (await count(db, entry.table, match)) === 0;
@@ -193,7 +213,12 @@ async function guarded(entry: WriteEntry, op: Op, role: Role, at: At): Promise<b
     allowed = await attempt[op](entry, role, at);
   } catch (e) {
     failure = e;
-    await dispose(`${nameOf(entry)}|${op}|${at}`).catch(() => undefined);
+    try {
+      await dispose(`${nameOf(entry)}|${op}|${at}`);
+    } catch (d) {
+      failure = new Error(`${msg(e)}
+and discarding the probe row also failed: ${msg(d)}`);
+    }
   }
   try {
     await runUndo(f);
@@ -215,15 +240,6 @@ describe.each(WRITES.map((entry) => [nameOf(entry), entry] as const))('%s', (_na
       for (const op of OPS) {
         if (entry.insertOnly && op !== 'insert') continue;
         const scope = effective(entry[op][role]);
-        if (op === 'insert' && !entry.probe.insert) {
-          expect(
-            scope,
-            `${nameOf(entry)} insert as ${role}: no insert probe, so it must be deny`,
-          ).toBe('deny');
-          const r = await client(role).from(entry.table).insert({});
-          expect(r.error, `${nameOf(entry)} plain insert as ${role}`).not.toBeNull();
-          continue;
-        }
         for (const at of SIDES) {
           const allowed = await guarded(entry, op, role, at);
           expect

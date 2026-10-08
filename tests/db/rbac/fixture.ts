@@ -742,8 +742,11 @@ export const barberOf = (f: RbacFixture, at: At) =>
 export const otherBranch = (f: RbacFixture, at: At) => branchOf(f, at === 'a' ? 'b' : 'a');
 export const uid = () => randomUUID();
 export const hex = (n = 8) => uid().replace(/-/g, '').slice(0, n);
-/** A far-future date (YYYY-MM-DD) unlikely to collide with anything. */
-export const farDate = () => dateAt(100 + Math.floor(Math.random() * 600));
+const dateBase = Math.floor(Math.random() * 600);
+let dateCount = 0;
+/** A far-future date (YYYY-MM-DD) that is different on every call within a run (600 days before it
+ * repeats), so cached probe rows can never collide. */
+export const farDate = () => dateAt(100 + ((dateBase + dateCount++) % 600));
 
 export function track(f: RbacFixture, undo: () => Promise<void>) {
   f.undo.push(undo);
@@ -778,7 +781,13 @@ export async function buildScoped<T>(
     return { value: await build(), undo: own };
   } catch (e) {
     f.undo = outer;
-    await runStack(own).catch(() => undefined);
+    try {
+      await runStack(own);
+    } catch (u) {
+      const m = (x: unknown) => (x instanceof Error ? x.message : String(x));
+      throw new Error(`${m(e)}
+and undoing the partly built probe also failed: ${m(u)}`);
+    }
     throw e;
   } finally {
     f.undo = outer;
@@ -891,6 +900,19 @@ export async function probeStaff(
   return { staffId, authId };
 }
 
+export const barberRow = (id: string, staffId: string, branchId: string) => ({
+  id,
+  staff_user_id: staffId,
+  home_branch_id: branchId,
+  status: 'available',
+});
+
+export const branchServiceRow = (f: RbacFixture, at: At, serviceId: string) => ({
+  id: uid(),
+  branch_id: branchOf(f, at),
+  service_id: serviceId,
+});
+
 /** A throwaway barber (own staff user) with home branch `branchId`. */
 export async function probeBarber(
   f: RbacFixture,
@@ -898,12 +920,7 @@ export async function probeBarber(
 ): Promise<{ barberId: string; staffId: string }> {
   const { staffId } = await probeStaff(f, 'barber');
   const barberId = uid();
-  await createRow(
-    f,
-    'barbers',
-    { id: barberId, staff_user_id: staffId, home_branch_id: branchId, status: 'available' },
-    'probe barber',
-  );
+  await createRow(f, 'barbers', barberRow(barberId, staffId, branchId), 'probe barber');
   trackBarber(f, barberId);
   return { barberId, staffId };
 }
@@ -978,15 +995,10 @@ export function trackBranch(f: RbacFixture, id: string) {
 /** A branch_services row (with a throwaway service) at branch `at`. */
 export async function probeBranchService(f: RbacFixture, at: At): Promise<string> {
   const serviceId = await probeService(f);
-  const id = uid();
-  await createRow(
-    f,
-    'branch_services',
-    { id, branch_id: branchOf(f, at), service_id: serviceId },
-    'probe branch service',
-  );
-  trackBranchService(f, id);
-  return id;
+  const row = branchServiceRow(f, at, serviceId);
+  await createRow(f, 'branch_services', row, 'probe branch service');
+  trackBranchService(f, row.id);
+  return row.id;
 }
 
 export function trackBranchService(f: RbacFixture, id: string) {

@@ -4,6 +4,8 @@
 import { dateAt } from '../fixtures/appointments';
 import {
   barberOf,
+  barberRow,
+  branchServiceRow,
   branchOf,
   customerOf,
   createRow,
@@ -315,7 +317,7 @@ export interface WriteTarget {
 export interface WriteProbe {
   /** A row to insert at branch 'a' or 'b' (for customer/barber 'own' probes, 'a' is their own). Any
    * prerequisite rows are created with the admin client and registered for removal. */
-  insert?: (f: RbacFixture, at: 'a' | 'b') => Promise<Record<string, unknown>>;
+  insert: (f: RbacFixture, at: 'a' | 'b') => Promise<Record<string, unknown>>;
   /** Creates (with admin) a throwaway row at 'a' or 'b'. For 'own' scopes 'a' is owned by the login
    * (a few such rows are the shared fixture rows themselves: the runner restores the changed
    * column afterwards). */
@@ -324,9 +326,9 @@ export interface WriteProbe {
   deleteTarget?: (f: RbacFixture, at: 'a' | 'b') => Promise<WriteTarget>;
   /** Error codes that mean "row security let the write through, a constraint then stopped it". */
   passCodes?: string[];
-  /** Error codes (besides 42501) that are a deliberate refusal, e.g. a trigger that raises because the
+  /** Errors (besides 42501) that are a deliberate refusal (code and message part must both match), e.g. a trigger that raises because the
    * caller cannot see the row it checks. */
-  refuseCodes?: string[];
+  refuseErrors?: { code: string; message: string }[];
   /** Probe rows of different operations conflict, so a cached row of another operation is torn down
    * before this one is used. */
   exclusive?: boolean;
@@ -712,7 +714,7 @@ export const WRITES: WriteEntry[] = [
         const { staffId } = await probeStaff(f, 'barber');
         const id = uid();
         trackBarber(f, id);
-        return { id, staff_user_id: staffId, home_branch_id: branchOf(f, at), status: 'available' };
+        return barberRow(id, staffId, branchOf(f, at));
       },
       // The barber login's own row is the shared fixture row; the runner restores the status.
       target: async (f, at) => ({ key: barberOf(f, at), column: 'status', value: 'on_break' }),
@@ -792,9 +794,9 @@ export const WRITES: WriteEntry[] = [
     probe: {
       insert: async (f, at) => {
         const service_id = await probeService(f);
-        const id = uid();
-        trackBranchService(f, id);
-        return { id, branch_id: branchOf(f, at), service_id };
+        const r = branchServiceRow(f, at, service_id);
+        trackBranchService(f, r.id);
+        return r;
       },
       target: async (f, at) => {
         const id = await probeBranchService(f, at);
@@ -957,7 +959,7 @@ export const WRITES: WriteEntry[] = [
     probe: {
       // A trigger checks the recipient exists in customers, as the caller: staff and other customers
       // cannot see that row, so it raises P0001 "recipient_id ... does not exist in customers".
-      refuseCodes: ['P0001'],
+      refuseErrors: [{ code: 'P0001', message: 'does not exist in customers' }],
       insert: async (f, at) => row(f, 'notifications', noteRow(f, at)),
       target: async (f, at) => {
         const r = await probeRow(f, 'notifications', noteRow(f, at));
