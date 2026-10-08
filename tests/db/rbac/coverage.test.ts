@@ -16,7 +16,7 @@ describe('coverage', () => {
     });
     const spec = (await res.json()) as { definitions?: Record<string, unknown> };
     const exposed = Object.keys(spec.definitions ?? {}).sort();
-    const classified = TABLES.map((t) => t.table).sort();
+    const classified = [...new Set(TABLES.map((t) => t.table))].sort();
     expect(
       exposed.filter((t) => !classified.includes(t)),
       'tables/views missing from the matrix',

@@ -30,18 +30,32 @@ export interface RbacFixture {
   owner: { authUserId: string; staffUserId: string };
   logins: { authUserId: string; staffUserId: string }[];
   customerIds: string[];
-  created: {
-    tickets: string[];
-    sessions: string[];
-    events: string[];
-    feedback: string[];
-    pushEndpoints: string[];
-    consents: string[];
-    audit: string[];
-    weeklyHours: string[];
-    prices: string[];
-    closures: string[];
-  };
+  created: Created;
+}
+
+interface Created {
+  tickets: string[];
+  sessions: string[];
+  events: string[];
+  feedback: string[];
+  pushEndpoints: string[];
+  consents: string[];
+  audit: string[];
+  weeklyHours: string[];
+  prices: string[];
+  closures: string[];
+}
+
+/** Everything built so far, so a failure partway through can still be cleaned up. */
+interface Setup {
+  base?: AppointmentFixture;
+  logins: { authUserId: string; staffUserId: string }[];
+  customerIds: string[];
+  /** staff_users ids / auth user ids created outside createStaffLogin (owner, barber C). */
+  staffIds: string[];
+  authIds: string[];
+  barberCId?: string;
+  created: Created;
 }
 
 const must = <T>(
@@ -68,7 +82,36 @@ async function signIn(email: string): Promise<Client> {
 }
 
 export async function createRbacFixture(): Promise<RbacFixture> {
+  const setup: Setup = {
+    logins: [],
+    customerIds: [],
+    staffIds: [],
+    authIds: [],
+    created: {
+      tickets: [],
+      sessions: [],
+      events: [],
+      feedback: [],
+      pushEndpoints: [],
+      consents: [],
+      audit: [],
+      weeklyHours: [],
+      prices: [],
+      closures: [],
+    },
+  };
+  try {
+    return await build(setup);
+  } catch (e) {
+    await cleanupSetup(setup, false).catch(() => undefined);
+    throw e;
+  }
+}
+
+async function build(setup: Setup): Promise<RbacFixture> {
   const base = await createAppointmentFixture();
+  setup.base = base;
+  const created = setup.created;
   const { admin, suffix, branchId: A, closedBranchId: B, serviceId } = base;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -81,6 +124,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     email_confirm: true,
   });
   check(ownerAuth, 'owner auth');
+  setup.authIds.push(ownerAuth.data.user!.id);
   const ownerRow = must(
     await admin
       .from('staff_users')
@@ -95,6 +139,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
       .single(),
     'owner staff_users',
   );
+  setup.staffIds.push(ownerRow.id);
   const owner = { authUserId: ownerAuth.data.user!.id, staffUserId: ownerRow.id };
   const ownerClient = await signIn(ownerEmail);
 
@@ -103,6 +148,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
   const analyst = await createStaffLogin(base, 'rbac-analyst', 'analyst', A);
   const otherManager = await createStaffLogin(base, 'rbac-other', 'branch_manager', B);
   const logins = [manager, receptionist, analyst, otherManager];
+  setup.logins.push(...logins);
 
   // Barber C at branch B.
   const cEmail = `rbac-barber-c-${suffix}@test.pixelbarber.local`;
@@ -112,6 +158,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     email_confirm: true,
   });
   check(cAuth, 'barber C auth');
+  setup.authIds.push(cAuth.data.user!.id);
   const cStaff = must(
     await admin
       .from('staff_users')
@@ -126,6 +173,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
       .single(),
     'barber C staff_users',
   );
+  setup.staffIds.push(cStaff.id);
   const cBarber = must(
     await admin
       .from('barbers')
@@ -134,6 +182,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
       .single(),
     'barber C barbers',
   );
+  setup.barberCId = cBarber.id;
   check(
     await admin.from('barber_skills').insert({ barber_id: cBarber.id, service_id: serviceId }),
     'barber C skill',
@@ -142,6 +191,8 @@ export async function createRbacFixture(): Promise<RbacFixture> {
   const barberA = base.barberA;
   const cust0 = base.customers[0]!;
   const cust1 = base.customers[1]!;
+  const cust2 = base.customers[2]!;
+  setup.customerIds.push(cust0.customerId, cust1.customerId, cust2.customerId);
 
   // Tickets (completed, one per branch).
   const ticket = async (
@@ -168,8 +219,28 @@ export async function createRbacFixture(): Promise<RbacFixture> {
         .single(),
       `ticket ${n}`,
     ).id;
-  const tA = await ticket('A', A, cust0.customerId, base.branchServiceId, barberA.barberId);
-  const tB = await ticket('B', B, cust1.customerId, base.closedBranchServiceId, barberC.barberId);
+  const trackedTicket: typeof ticket = async (...args) => {
+    const id = await ticket(...args);
+    created.tickets.push(id);
+    return id;
+  };
+  const tA = await trackedTicket('A', A, cust0.customerId, base.branchServiceId, barberA.barberId);
+  const tB = await trackedTicket(
+    'B',
+    B,
+    cust1.customerId,
+    base.closedBranchServiceId,
+    barberC.barberId,
+  );
+  // Second branch-A rows that no probe login owns (customer 2, barber B), to tell "own" from "branch".
+  const barberB = base.barberB;
+  const tA2 = await trackedTicket(
+    'A2',
+    A,
+    cust2.customerId,
+    base.branchServiceId,
+    barberB.barberId,
+  );
 
   // Appointments.
   const appt = async (branch: string, customerId: string, bsId: string, day: number) =>
@@ -190,6 +261,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const aA = await appt(A, cust0.customerId, base.branchServiceId, 2);
   const aB = await appt(B, cust1.customerId, base.closedBranchServiceId, 2);
+  const aA2 = await appt(A, cust2.customerId, base.branchServiceId, 3);
 
   // Feedback.
   const fb = async (ticketId: string, customerId: string, branch: string, barberId: string) =>
@@ -209,6 +281,8 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const fA = await fb(tA, cust0.customerId, A, barberA.barberId);
   const fB = await fb(tB, cust1.customerId, B, barberC.barberId);
+  const fA2 = await fb(tA2, cust2.customerId, A, barberB.barberId);
+  created.feedback.push(fA, fB, fA2);
 
   // Queue events.
   const ev = async (ticketId: string) =>
@@ -222,6 +296,8 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const eA = await ev(tA);
   const eB = await ev(tB);
+  const eA2 = await ev(tA2);
+  created.events.push(eA, eB, eA2);
 
   // staff_message notifications (customer recipients).
   const note = async (customerId: string, branch: string) =>
@@ -242,6 +318,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const nA = await note(cust0.customerId, A);
   const nB = await note(cust1.customerId, B);
+  const nA2 = await note(cust2.customerId, A);
 
   // Service sessions (ended_at left null so no stats rollup trigger fires).
   const session = async (ticketId: string, barberId: string) =>
@@ -255,6 +332,8 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const sA = await session(tA, barberA.barberId);
   const sB = await session(tB, barberC.barberId);
+  const sB2 = await session(tA2, barberB.barberId);
+  created.sessions.push(sA, sB, sB2);
 
   // Weekly hours and days off.
   const wh = async (barberId: string, branch: string) =>
@@ -274,11 +353,14 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const whA = await wh(barberA.barberId, A);
   const whC = await wh(barberC.barberId, B);
+  const whB2 = await wh(barberB.barberId, A);
+  created.weeklyHours.push(whA, whC, whB2);
   const offDate = dateAt(40);
   check(
     await admin.from('barber_days_off').insert([
       { barber_id: barberA.barberId, off_date: offDate },
       { barber_id: barberC.barberId, off_date: offDate },
+      { barber_id: barberB.barberId, off_date: offDate },
     ]),
     'days off',
   );
@@ -286,11 +368,14 @@ export async function createRbacFixture(): Promise<RbacFixture> {
   // The weekly-hours / days-off triggers refill barber_schedule (replacing non-manual rows), so the
   // schedule rows probed are created last and marked manual, which the refill never overwrites.
   const manualRow = async (barberId: string, branch: string) => {
-    await admin
-      .from('barber_schedule')
-      .delete()
-      .eq('barber_id', barberId)
-      .eq('work_date', dateAt(0));
+    check(
+      await admin
+        .from('barber_schedule')
+        .delete()
+        .eq('barber_id', barberId)
+        .eq('work_date', dateAt(0)),
+      'schedule row delete',
+    );
     return must(
       await admin
         .from('barber_schedule')
@@ -307,9 +392,13 @@ export async function createRbacFixture(): Promise<RbacFixture> {
       'schedule row',
     );
   };
-  await admin.from('barber_schedule').delete().eq('barber_id', barberC.barberId);
+  check(
+    await admin.from('barber_schedule').delete().eq('barber_id', barberC.barberId),
+    'barber C schedule delete',
+  );
   const aSchedule = await manualRow(barberA.barberId, A);
   const cSchedule = await manualRow(barberC.barberId, B);
+  const bSchedule = await manualRow(barberB.barberId, A);
 
   // Barber service stats (admin insert).
   check(
@@ -347,6 +436,8 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const cnA = await consent(cust0.customerId);
   const cnB = await consent(cust1.customerId);
+  const cnA2 = await consent(cust2.customerId);
+  created.consents.push(cnA, cnB, cnA2);
   const push = async (customerId: string, label: string) => {
     const endpoint = `https://push.example/rbac-${label}-${suffix}`;
     const id = must(
@@ -362,10 +453,12 @@ export async function createRbacFixture(): Promise<RbacFixture> {
         .single(),
       'push_subscription',
     ).id;
+    created.pushEndpoints.push(endpoint);
     return { id, endpoint };
   };
   const pA = await push(cust0.customerId, 'a');
   const pB = await push(cust1.customerId, 'b');
+  const pA2 = await push(cust2.customerId, 'a2');
 
   // Audit log probe.
   const audit = must(
@@ -382,6 +475,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
       .single(),
     'audit_log',
   ).id;
+  created.audit.push(audit);
 
   // Catalogue extras: closures and prices.
   const closure = async (branch: string) =>
@@ -395,6 +489,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const clA = await closure(A);
   const clB = await closure(B);
+  created.closures.push(clA, clB);
   const price = async (bsId: string) =>
     must(
       await admin
@@ -406,6 +501,7 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     ).id;
   const prA = await price(base.branchServiceId);
   const prB = await price(base.closedBranchServiceId);
+  created.prices.push(prA, prB);
 
   // Catalogue reads.
   const hoursOf = async (branch: string) =>
@@ -416,32 +512,52 @@ export async function createRbacFixture(): Promise<RbacFixture> {
   const hoursA = await hoursOf(A);
   const hoursB = await hoursOf(B);
   const business = must(await admin.from('businesses').select('id').limit(1).single(), 'business');
-  const counters = must(
-    await admin.from('branch_ticket_counters').select('branch_id').in('branch_id', [A, B]),
-    'counters',
+  // Counter rows (cleared with the base fixture's branches).
+  check(
+    await admin.from('branch_ticket_counters').insert([
+      { branch_id: A, ticket_date: dateAt(0), last_seq: 1 },
+      { branch_id: B, ticket_date: dateAt(0), last_seq: 1 },
+    ]),
+    'branch_ticket_counters',
   );
 
   const rows: Record<string, RowSet> = {
-    queue_tickets: { a: [tA], b: [tB], own: [tA] },
-    appointments: { a: [aA], b: [aB], own: [aA] },
-    feedback: { a: [fA], b: [fB], own: [fA] },
-    queue_events: { a: [eA], b: [eB], own: [eA] },
-    notifications: { a: [nA], b: [nB], own: [nA] },
-    service_sessions: { a: [sA], b: [sB], own: [sA] },
-    barber_schedule: { a: [aSchedule.id], b: [cSchedule.id], own: [aSchedule.id] },
-    barber_weekly_hours: { a: [whA], b: [whC], own: [whA] },
+    queue_tickets: { a: [tA, tA2], b: [tB], own: [tA] },
+    appointments: { a: [aA, aA2], b: [aB], own: [aA] },
+    feedback: { a: [fA, fA2], b: [fB], own: [fA] },
+    queue_events: { a: [eA, eA2], b: [eB], own: [eA] },
+    notifications: { a: [nA, nA2], b: [nB], own: [nA] },
+    service_sessions: { a: [sA, sB2], b: [sB], own: [sA] },
+    barber_schedule: {
+      a: [aSchedule.id, bSchedule.id],
+      b: [cSchedule.id],
+      own: [aSchedule.id],
+    },
+    barber_weekly_hours: { a: [whA, whB2], b: [whC], own: [whA] },
     // Composite-key tables (no id column): keyed by barber_id, one row each.
-    barber_days_off: { a: [barberA.barberId], b: [barberC.barberId], own: [barberA.barberId] },
+    barber_days_off: {
+      a: [barberA.barberId, barberB.barberId],
+      b: [barberC.barberId],
+      own: [barberA.barberId],
+    },
     barber_service_stats: { a: [barberA.barberId], b: [barberC.barberId], own: [] },
-    barber_skills: { a: [barberA.barberId], b: [barberC.barberId], own: [barberA.barberId] },
+    barber_skills: {
+      a: [barberA.barberId, barberB.barberId],
+      b: [barberC.barberId],
+      own: [barberA.barberId],
+    },
     barbers: {
       a: [barberA.barberId, base.barberB.barberId],
       b: [barberC.barberId],
       own: [barberA.barberId],
     },
-    consents: { a: [cnA], b: [cnB], own: [cnA] },
-    push_subscriptions: { a: [pA.id], b: [pB.id], own: [pA.id] },
-    customers: { a: [cust0.customerId], b: [cust1.customerId], own: [cust0.customerId] },
+    consents: { a: [cnA, cnA2], b: [cnB], own: [cnA] },
+    push_subscriptions: { a: [pA.id, pA2.id], b: [pB.id], own: [pA.id] },
+    customers: {
+      a: [cust0.customerId, cust2.customerId],
+      b: [cust1.customerId],
+      own: [cust0.customerId],
+    },
     audit_log: { a: [audit], b: [], own: [] },
     branches: { a: [A], b: [B], own: [] },
     branch_hours: { a: hoursA, b: hoursB, own: [] },
@@ -452,12 +568,17 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     businesses: { a: [business.id], b: [], own: [] },
     capabilities: { a: ['view_customers'], b: [], own: [] },
     role_capabilities: { a: ['view_customers'], b: [], own: [] },
-    // Barber staff rows are deliberately not probed here: barbers have no staff_branch_assignments row,
-    // so staff_users_branch_scoped_read never shows them to branch staff (recorded in the task report).
+    // Barber staff rows are probed separately (staff_users_barbers): barbers have no
+    // staff_branch_assignments row, so staff_users_branch_scoped_read never shows them to branch staff.
     staff_users: {
       a: [manager.staffUserId, receptionist.staffUserId, analyst.staffUserId],
       b: [otherManager.staffUserId],
       own: [],
+    },
+    staff_users_barbers: {
+      a: [barberA.staffUserId],
+      b: [barberC.staffUserId],
+      own: [barberA.staffUserId],
     },
     staff_branch_assignments: {
       a: [manager.staffUserId, receptionist.staffUserId, analyst.staffUserId],
@@ -465,8 +586,8 @@ export async function createRbacFixture(): Promise<RbacFixture> {
       own: [],
     },
     branch_ticket_counters: {
-      a: counters.filter((c) => c.branch_id === A).map((c) => c.branch_id),
-      b: counters.filter((c) => c.branch_id === B).map((c) => c.branch_id),
+      a: [A],
+      b: [B],
       own: [],
     },
     branch_status_view: { a: [A], b: [B], own: [] },
@@ -475,7 +596,11 @@ export async function createRbacFixture(): Promise<RbacFixture> {
       b: [base.closedBranchServiceId],
       own: [],
     },
-    customer_segments: { a: [cust0.customerId], b: [cust1.customerId], own: [cust0.customerId] },
+    customer_segments: {
+      a: [cust0.customerId, cust2.customerId],
+      b: [cust1.customerId],
+      own: [cust0.customerId],
+    },
   };
 
   const clients: Record<Role, Client> = {
@@ -507,33 +632,46 @@ export async function createRbacFixture(): Promise<RbacFixture> {
     rows,
     owner,
     logins,
-    customerIds: [cust0.customerId, cust1.customerId],
-    created: {
-      tickets: [tA, tB],
-      sessions: [sA, sB],
-      events: [eA, eB],
-      feedback: [fA, fB],
-      pushEndpoints: [pA.endpoint, pB.endpoint],
-      consents: [cnA, cnB],
-      audit: [audit],
-      weeklyHours: [whA, whC],
-      prices: [prA, prB],
-      closures: [clA, clB],
-    },
+    customerIds: setup.customerIds,
+    created,
   };
 }
 
 export async function cleanupRbacFixture(f: RbacFixture): Promise<void> {
-  const { admin, base, created } = f;
+  await cleanupSetup(
+    {
+      base: f.base,
+      logins: f.logins,
+      customerIds: f.customerIds,
+      staffIds: [f.owner.staffUserId, f.barberC.staffUserId],
+      authIds: [f.owner.authUserId, f.barberC.authUserId],
+      barberCId: f.barberC.barberId,
+      created: f.created,
+    },
+    true,
+  );
+}
+
+/** FK-safe removal of everything the fixture created. strict: throw on the first failure; otherwise
+ * keep going (used to tidy up after a failed setup). */
+async function cleanupSetup(s: Setup, strict: boolean): Promise<void> {
+  const { base, created } = s;
+  if (!base) return;
+  const { admin } = base;
   const run = async (what: string, p: PromiseLike<{ error: { message: string } | null }>) => {
     const r = await p;
-    if (r.error) throw new Error(`cleanup ${what}: ${r.error.message}`);
+    if (r.error && strict) throw new Error(`cleanup ${what}: ${r.error.message}`);
   };
-  const barberIds = [base.barberA.barberId, f.barberC.barberId];
-  await run(
-    'staff_message notifications',
-    admin.from('notifications').delete().in('recipient_id', f.customerIds),
-  );
+  const barberIds = [
+    base.barberA.barberId,
+    base.barberB.barberId,
+    ...(s.barberCId ? [s.barberCId] : []),
+  ];
+  if (s.customerIds.length > 0)
+    await run(
+      'staff_message notifications',
+      admin.from('notifications').delete().in('recipient_id', s.customerIds),
+    );
   await run(
     'push_subscriptions',
     admin.from('push_subscriptions').delete().in('endpoint', created.pushEndpoints),
@@ -554,29 +692,26 @@ export async function cleanupRbacFixture(f: RbacFixture): Promise<void> {
     'barber_weekly_hours',
     admin.from('barber_weekly_hours').delete().in('id', created.weeklyHours),
   );
-  await run(
-    'barber C schedule',
-    admin.from('barber_schedule').delete().eq('barber_id', f.barberC.barberId),
-  );
-  await run(
-    'barber C skills',
-    admin.from('barber_skills').delete().eq('barber_id', f.barberC.barberId),
-  );
-  await run('barber C barbers', admin.from('barbers').delete().eq('id', f.barberC.barberId));
-  await run(
-    'barber C staff_users',
-    admin.from('staff_users').delete().eq('id', f.barberC.staffUserId),
-  );
-  const delC = await admin.auth.admin.deleteUser(f.barberC.authUserId);
-  if (delC.error) throw new Error(`cleanup barber C auth: ${delC.error.message}`);
-  await run('owner staff_users', admin.from('staff_users').delete().eq('id', f.owner.staffUserId));
-  const delO = await admin.auth.admin.deleteUser(f.owner.authUserId);
-  if (delO.error) throw new Error(`cleanup owner auth: ${delO.error.message}`);
+  if (s.barberCId) {
+    await run(
+      'barber C schedule',
+      admin.from('barber_schedule').delete().eq('barber_id', s.barberCId),
+    );
+    await run('barber C skills', admin.from('barber_skills').delete().eq('barber_id', s.barberCId));
+    await run('barber C barbers', admin.from('barbers').delete().eq('id', s.barberCId));
+  }
+  // Staff rows (owner, barber C) go before their auth users (staff_users.auth_user_id is restrict).
+  if (s.staffIds.length > 0)
+    await run('staff_users', admin.from('staff_users').delete().in('id', s.staffIds));
+  for (const authId of s.authIds) {
+    const r = await admin.auth.admin.deleteUser(authId);
+    if (r.error && strict) throw new Error(`cleanup auth user: ${r.error.message}`);
+  }
   await run(
     'branch_service_prices',
     admin.from('branch_service_prices').delete().in('id', created.prices),
   );
   await run('branch_closures', admin.from('branch_closures').delete().in('id', created.closures));
-  for (const login of f.logins) await cleanupStaffLogin(base, login);
+  for (const login of s.logins) await cleanupStaffLogin(base, login);
   await cleanupAppointmentFixture(base);
 }

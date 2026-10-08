@@ -29,15 +29,20 @@ function expectedRows(scope: ReadScope, role: Role, rows: RowSet): string[] {
   return [...new Set(set)].sort();
 }
 
-describe.each(TABLES)('$table', (entry) => {
+describe.each(TABLES)('$table $rowsKey', (entry) => {
   it.each(ROLES)('%s', async (role) => {
-    const rows = f.rows[entry.table];
-    if (!rows) throw new Error(`fixture has no rows for ${entry.table}`);
+    const rowsKey = entry.rowsKey ?? entry.table;
+    const rows = f.rows[rowsKey];
+    if (!rows) throw new Error(`fixture has no rows for ${rowsKey}`);
     const ids = [...new Set([...rows.a, ...rows.b, ...rows.own])];
     const { data, error } = await f.clients[role]
       .from(entry.table as never)
       .select(entry.key)
       .in(entry.key, ids);
+    // A permission error (42501) means "no rows"; any other error is a real failure.
+    if (error && error.code !== '42501') {
+      throw new Error(`${entry.table} as ${role}: ${error.message}`);
+    }
     const seen = error
       ? []
       : [

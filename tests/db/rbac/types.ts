@@ -39,6 +39,8 @@ export interface TableEntry {
   table: string;
   /** Column holding the row identity used in RowSet (usually 'id'). */
   key: string;
+  /** Key into the fixture's row sets when it differs from `table` (default `table`). */
+  rowsKey?: string;
   read: PerRole<ReadScope>;
 }
 

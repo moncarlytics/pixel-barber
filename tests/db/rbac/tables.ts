@@ -231,6 +231,25 @@ export const TABLES: TableEntry[] = [
       ]),
     ) as PerRole<ReadScope>,
   },
+  {
+    // The barbers' own staff_users rows, probed separately from the branch staff above.
+    table: 'staff_users',
+    rowsKey: 'staff_users_barbers',
+    key: 'id',
+    read: Object.fromEntries(
+      ROLES.map((r) => [
+        r,
+        {
+          ...STAFF_USERS[r],
+          gap: 'J-staff-users-barbers',
+          // Barbers have no staff_branch_assignments row, so branch staff never see their staff rows.
+          ...(['receptionist', 'manager', 'analyst', 'otherManager'].includes(r)
+            ? { currently: 'none' as const }
+            : {}),
+        },
+      ]),
+    ) as PerRole<ReadScope>,
+  },
   { table: 'branch_status_view', key: 'branch_id', read: everyone('all', PUBLIC) },
   {
     table: 'current_branch_service_price',
