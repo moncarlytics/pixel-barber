@@ -140,3 +140,10 @@ p_value smallint, p_comment text) returns uuid` (`authenticated`):
 
 Gemini comment themes; per-branch low-rating threshold settings; replying to customers; editing or
 deleting feedback; feedback for appointments that never became tickets; staff push notifications.
+
+## Amendments (implementation)
+
+- The staff summary uses "1 rating" / "N ratings" (ICU plural).
+- The Feedback page shows "You don't have access to feedback." to staff without `view_branch_reports`.
+- Promotion order is migrations, then apps, then send-notifications, so the live push never opens a
+  ticket page without the form.

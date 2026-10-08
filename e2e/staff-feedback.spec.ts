@@ -131,7 +131,7 @@ test('branch manager sees a low rating, marks it seen, and the banner clears', a
     const main = page.locator('main');
     await main.getByLabel('Branch', { exact: true }).selectOption(branch!.id);
     await expect(main.getByText('Waited 40 minutes past my turn')).toBeVisible({ timeout: 15000 });
-    await expect(main.getByText('Last 30 days: 1.00 average from 1 ratings')).toBeVisible();
+    await expect(main.getByText('Last 30 days: 1.00 average from 1 rating')).toBeVisible();
     await main.getByRole('button', { name: 'Mark as seen' }).press('Enter');
     await expect(main.getByText(/Seen by SFB E2E Manager on/)).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('link', { name: /new low rating/ })).toHaveCount(0, {

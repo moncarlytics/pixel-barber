@@ -6,6 +6,7 @@
 // customers only.
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+import { updateTicketWithVersion } from '@pixel-barber/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   cleanupAppointmentFixture,
@@ -181,6 +182,38 @@ describe('feedback request on completion', () => {
     // Re-saving a completed ticket doesn't queue another.
     await f.admin.from('queue_tickets').update({ state: 'completed' }).eq('id', t);
     expect(await feedbackRequests(t)).toHaveLength(1);
+  });
+
+  it("queues one request when the barber's own session completes the ticket", async () => {
+    const { data: row, error: insErr } = await f.admin
+      .from('queue_tickets')
+      .insert({
+        ticket_number: `PB-FB-${f.suffix}-${Math.random().toString(36).slice(2, 7)}`,
+        branch_id: f.branchId,
+        customer_id: f.customers[3].customerId,
+        branch_service_id: f.branchServiceId,
+        assigned_barber_id: f.barberA.barberId,
+        state: 'in_service',
+        created_by: 'customer',
+      })
+      .select('id, version')
+      .single();
+    if (insErr) throw insErr;
+    const t = row.id as string;
+    const res = await updateTicketWithVersion(f.barberClient as never, t, row.version as number, {
+      state: 'completed',
+      completed_at: new Date().toISOString(),
+    });
+    expect(res.success).toBe(true);
+    const { data: after } = await f.admin
+      .from('queue_tickets')
+      .select('state')
+      .eq('id', t)
+      .single();
+    expect(after!.state).toBe('completed');
+    const rows = await feedbackRequests(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ recipient_id: f.customers[3].customerId });
   });
 
   it('queues nothing for a walk-in without an app account', async () => {

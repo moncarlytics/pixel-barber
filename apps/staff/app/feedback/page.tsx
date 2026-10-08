@@ -30,22 +30,30 @@ export default function FeedbackPage() {
   const [branchesLoaded, setBranchesLoaded] = useState(false);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [canEscalate, setCanEscalate] = useState(false);
+  const [canView, setCanView] = useState<boolean | null>(null);
+  const [branchesFailed, setBranchesFailed] = useState(false);
+  const [seenFailed, setSeenFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const requestKey = `${branchId}:${reloadKey}`;
 
   useEffect(() => {
     let cancelled = false;
-    loadManageableBranches(supabase)
-      .then((list) => {
-        if (cancelled) return;
-        setBranches(list);
-        setBranchesLoaded(true);
-        setBranchId((prev) => prev ?? list[0]?.id ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setBranchesLoaded(true);
-      });
+    supabase.rpc('has_capability', { cap: 'view_branch_reports' }).then(({ data }) => {
+      if (cancelled) return;
+      setCanView(data === true);
+      if (data !== true) return;
+      loadManageableBranches(supabase)
+        .then((list) => {
+          if (cancelled) return;
+          setBranches(list);
+          setBranchesLoaded(true);
+          setBranchId((prev) => prev ?? list[0]?.id ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) setBranchesFailed(true);
+        });
+    });
     supabase.rpc('has_capability', { cap: 'handle_escalations' }).then(({ data }) => {
       if (!cancelled) setCanEscalate(data === true);
     });
@@ -82,6 +90,7 @@ export default function FeedbackPage() {
 
   async function markSeen(id: string) {
     const { error } = await supabase.rpc('mark_feedback_seen', { p_feedback_id: id });
+    setSeenFailed(!!error);
     if (!error) window.dispatchEvent(new Event(FEEDBACK_SEEN_EVENT));
     setReloadKey((k) => k + 1);
   }
@@ -91,7 +100,12 @@ export default function FeedbackPage() {
   return (
     <main>
       <h1>{t('title')}</h1>
-      {branchesLoaded && branches.length === 0 && <p>{t('noBranches')}</p>}
+      {canView === false && <p>{t('noAccess')}</p>}
+      {canView === true && branchesFailed && <p role="alert">{t('loadFailed')}</p>}
+      {canView === true && seenFailed && <p role="alert">{t('loadFailed')}</p>}
+      {canView === true && !branchesFailed && branchesLoaded && branches.length === 0 && (
+        <p>{t('noBranches')}</p>
+      )}
       {branches.length > 0 && (
         <div>
           <label htmlFor="feedback-branch">{t('branch')}</label>
