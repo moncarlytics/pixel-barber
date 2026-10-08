@@ -235,10 +235,29 @@ test.describe.serial('today dashboard and reports', () => {
       barbers.getByRole('button', { name: 'Download CSV' }).press('Enter'),
     ]);
     expect(download.suggestedFilename()).toBe(`pixel-barber-barbers-${visitDay}-${visitDay}.csv`);
-    const csv = readFileSync((await download.path())!, 'utf8').replace(/^﻿/, '');
+    const csv = readFileSync((await download.path())!, 'utf8').replace(/^\uFEFF/, '');
     expect(csv.split('\r\n')[0]).toBe(
       'Barber,Served,Average haircut time,No-shows,Average rating,Estimated takings',
     );
     expect(csv.split('\r\n')[1]).toBe('SRP E2E Barber,1,30,0,,50');
+  });
+
+  test('a branch manager downloads the whole report as Excel and PDF', async ({ page }) => {
+    test.setTimeout(120_000);
+    await logIn(page);
+    const main = await openReport(page);
+    const download = async (button: string) => {
+      const [file] = await Promise.all([
+        page.waitForEvent('download'),
+        main.getByRole('button', { name: button }).press('Enter'),
+      ]);
+      return { name: file.suggestedFilename(), bytes: readFileSync((await file.path())!) };
+    };
+    const excel = await download('Download Excel');
+    expect(excel.name).toBe(`pixel-barber-report-${seed.branchCode}-${visitDay}-${visitDay}.xlsx`);
+    expect(excel.bytes.subarray(0, 2).toString('latin1')).toBe('PK');
+    const pdf = await download('Download PDF');
+    expect(pdf.name).toBe(`pixel-barber-report-${seed.branchCode}-${visitDay}-${visitDay}.pdf`);
+    expect(pdf.bytes.subarray(0, 4).toString('latin1')).toBe('%PDF');
   });
 });

@@ -10,6 +10,8 @@ import { Metric } from './Metric';
 import { presetRange, type Preset } from './presets';
 import { toCsv } from './csv';
 import { downloadBlob } from './download';
+import { buildPdfContent, buildWorkbookSheets } from './exportContent';
+import { downloadExcel, downloadPdf, reportFileName } from './exportFiles';
 import { buildReportTables, buildSummaryItems, type Label, type ReportTable } from './reportTables';
 import type { BranchReport } from './reportTypes';
 
@@ -90,6 +92,9 @@ export default function ReportsPage() {
   }
 
   const current = loaded && loaded.key === requestKey ? loaded : null;
+  const selectedBranch = branches.find((b) => b.id === selection);
+  const branchName = selection === ALL ? t('allBranches') : (selectedBranch?.name ?? '');
+  const branchCode = selection === ALL ? 'all' : (selectedBranch?.branch_code ?? 'branch');
 
   return (
     <main>
@@ -152,7 +157,14 @@ export default function ReportsPage() {
         (current.report.hours.length === 0 ? (
           <p>{t('empty')}</p>
         ) : (
-          <ReportView report={current.report} from={current.from} to={current.to} label={label} />
+          <ReportView
+            report={current.report}
+            from={current.from}
+            to={current.to}
+            label={label}
+            branchName={branchName}
+            branchCode={branchCode}
+          />
         ))}
     </main>
   );
@@ -163,16 +175,46 @@ function ReportView({
   from,
   to,
   label,
+  branchName,
+  branchCode,
 }: {
   report: BranchReport;
   from: string;
   to: string;
   label: Label;
+  branchName: string;
+  branchCode: string;
 }) {
+  const [exportFailed, setExportFailed] = useState(false);
+  async function exportFile(kind: 'xlsx' | 'pdf') {
+    setExportFailed(false);
+    const generatedAt = new Date().toLocaleString('en-GB', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'UTC',
+    });
+    const input = { report, label, branchName, from, to, generatedAt };
+    const fileName = reportFileName(branchCode, from, to, kind);
+    try {
+      if (kind === 'xlsx') await downloadExcel(buildWorkbookSheets(input), fileName);
+      else await downloadPdf(buildPdfContent(input), fileName);
+    } catch {
+      setExportFailed(true);
+    }
+  }
   const items = buildSummaryItems(report.summary, label);
   const tables = buildReportTables(report, label);
   return (
     <>
+      <div>
+        <button type="button" onClick={() => exportFile('xlsx')}>
+          {label('downloadExcel')}
+        </button>
+        <button type="button" onClick={() => exportFile('pdf')}>
+          {label('downloadPdf')}
+        </button>
+        {exportFailed && <p role="alert">{label('exportFailed')}</p>}
+      </div>
       <section aria-labelledby="report-summary">
         <h2 id="report-summary">{label('summary.title')}</h2>
         {items.map((i) => (
@@ -199,7 +241,7 @@ function TableSection({
 }) {
   const headingId = `report-${table.key}`;
   function downloadCsv() {
-    const csv = '﻿' + toCsv(table.headers, table.raw);
+    const csv = '\uFEFF' + toCsv(table.headers, table.raw);
     downloadBlob(
       new Blob([csv], { type: 'text/csv;charset=utf-8' }),
       `pixel-barber-${table.fileKey}-${from}-${to}.csv`,

@@ -8,6 +8,7 @@ type Supabase = ReturnType<typeof createBrowserSupabaseClient>;
 export interface ManageableBranch {
   id: string;
   name: string;
+  branch_code: string;
 }
 
 export async function loadManageableBranches(supabase: Supabase): Promise<ManageableBranch[]> {
@@ -18,7 +19,7 @@ export async function loadManageableBranches(supabase: Supabase): Promise<Manage
   ] = await Promise.all([
     supabase.rpc('auth_role'),
     supabase.rpc('auth_branch_ids'),
-    supabase.from('branches').select('id, name').order('name'),
+    supabase.from('branches').select('id, name, branch_code').order('name'),
   ]);
   if (roleError || idsError || branchesError) throw roleError ?? idsError ?? branchesError;
   const all = (branches ?? []) as ManageableBranch[];
