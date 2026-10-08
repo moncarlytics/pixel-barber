@@ -208,6 +208,11 @@ test.describe.serial('today dashboard and reports', () => {
     await logIn(page);
     await page.goto(`${STAFF}/settings/branch/${seed.branchId}`);
     const main = page.locator('main');
+    await main.getByLabel('Long wait warning (minutes)').fill('4');
+    await main.getByRole('button', { name: 'Save warning' }).press('Enter');
+    await expect(main.getByRole('alert')).toHaveText('Enter a number from 5 to 180.', {
+      timeout: 15000,
+    });
     await main.getByLabel('Long wait warning (minutes)').fill('5');
     await main.getByRole('button', { name: 'Save warning' }).press('Enter');
     await expect(main.getByText('Warning saved')).toBeVisible({ timeout: 15000 });

@@ -193,7 +193,7 @@ export default function BranchEditPage() {
         <button type="submit">{t('save')}</button>
       </form>
 
-      <form onSubmit={handleSaveLongWait}>
+      <form onSubmit={handleSaveLongWait} noValidate>
         <label htmlFor="long-wait">{t('longWait')}</label>
         <input
           id="long-wait"
