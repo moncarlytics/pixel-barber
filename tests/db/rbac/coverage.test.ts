@@ -4,7 +4,7 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 import { describe, expect, it } from 'vitest';
-import { TABLES } from './tables';
+import { TABLES, WRITES } from './tables';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -25,5 +25,13 @@ describe('coverage', () => {
       classified.filter((t) => !exposed.includes(t)),
       'matrix entries that no longer exist',
     ).toEqual([]);
+  });
+
+  it('has a write entry for every base table (and only those)', () => {
+    const views = ['branch_status_view', 'current_branch_service_price', 'customer_segments'];
+    const base = [...new Set(TABLES.map((t) => t.table))].filter((t) => !views.includes(t)).sort();
+    // A table may have more than one write entry (e.g. the forged-ticket probe).
+    const written = [...new Set(WRITES.map((w) => w.table))].sort();
+    expect(written).toEqual(base);
   });
 });

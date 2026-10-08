@@ -749,10 +749,11 @@ export function track(f: RbacFixture, undo: () => Promise<void>) {
   f.undo.push(undo);
 }
 
-export async function runUndo(f: RbacFixture): Promise<void> {
+/** Runs a stack of undo steps last-in first-out; every step runs, the first failure is thrown. */
+export async function runStack(stack: (() => Promise<void>)[]): Promise<void> {
   let first: unknown;
-  while (f.undo.length > 0) {
-    const undo = f.undo.pop()!;
+  while (stack.length > 0) {
+    const undo = stack.pop()!;
     try {
       await undo();
     } catch (e) {
@@ -760,6 +761,28 @@ export async function runUndo(f: RbacFixture): Promise<void> {
     }
   }
   if (first) throw first instanceof Error ? first : new Error(String(first));
+}
+
+export const runUndo = (f: RbacFixture) => runStack(f.undo);
+
+/** Runs `build`, collecting everything it registers into its own undo stack (so the result can be
+ * kept across several attempts and torn down on its own). */
+export async function buildScoped<T>(
+  f: RbacFixture,
+  build: () => Promise<T>,
+): Promise<{ value: T; undo: (() => Promise<void>)[] }> {
+  const outer = f.undo;
+  const own: (() => Promise<void>)[] = [];
+  f.undo = own;
+  try {
+    return { value: await build(), undo: own };
+  } catch (e) {
+    f.undo = outer;
+    await runStack(own).catch(() => undefined);
+    throw e;
+  } finally {
+    f.undo = outer;
+  }
 }
 
 /** Registers deletion of the rows matching `match` (rows already gone are fine). */
@@ -791,30 +814,29 @@ export async function probeRow(
   return row;
 }
 
-export async function probeService(f: RbacFixture): Promise<string> {
-  const id = uid();
-  const business = f.rows.businesses!.a[0]!;
-  await createRow(
-    f,
-    'services',
-    {
-      id,
-      business_id: business,
-      name: `RBAC Probe Service ${hex()}`,
-      default_duration_minutes: 30,
-    },
-    'probe service',
-  );
-  trackDelete(f, 'services', { id });
-  return id;
-}
+export const serviceRow = (f: RbacFixture) => ({
+  id: uid(),
+  business_id: f.rows.businesses!.a[0]!,
+  name: `RBAC Probe Service ${hex()}`,
+  default_duration_minutes: 30,
+});
 
-/** A staff_users row with its own auth user, optionally assigned to a branch. */
-export async function probeStaff(
-  f: RbacFixture,
-  role: 'receptionist' | 'barber',
-  branchId?: string,
-): Promise<{ staffId: string; authId: string }> {
+/** A ticket row at branch `at`: customer 0 (A) or 1 (B), assigned barber A (A) or C (B). */
+export const ticketRow = (f: RbacFixture, at: At, over: Record<string, unknown> = {}) => ({
+  id: uid(),
+  ticket_number: `PB-RBACW-${hex(10)}`,
+  branch_id: branchOf(f, at),
+  customer_id: customerOf(f, at).customerId,
+  branch_service_id: serviceOf(f, at),
+  assigned_barber_id: barberOf(f, at),
+  state: 'completed',
+  completed_at: new Date().toISOString(),
+  created_by: 'staff',
+  ...over,
+});
+
+/** A throwaway auth user; removed on undo. */
+export async function probeAuthUser(f: RbacFixture): Promise<{ authId: string; email: string }> {
   const email = `rbac-probe-${hex(12)}@test.pixelbarber.local`;
   const auth = await f.admin.auth.admin.createUser({
     email,
@@ -827,20 +849,35 @@ export async function probeStaff(
     const r = await f.admin.auth.admin.deleteUser(authId);
     if (r.error) throw new Error(`undo auth user: ${r.error.message}`);
   });
-  const staffId = uid();
-  await createRow(
-    f,
-    'staff_users',
-    {
-      id: staffId,
-      auth_user_id: authId,
-      name: 'RBAC Probe',
-      email,
-      role,
-      invite_status: 'accepted',
-    },
-    'probe staff',
-  );
+  return { authId, email };
+}
+
+export async function probeService(f: RbacFixture): Promise<string> {
+  const row = serviceRow(f);
+  await createRow(f, 'services', row, 'probe service');
+  trackDelete(f, 'services', { id: row.id });
+  return row.id;
+}
+
+export const staffUserRow = (authId: string, email: string, role: 'receptionist' | 'barber') => ({
+  id: uid(),
+  auth_user_id: authId,
+  name: 'RBAC Probe',
+  email,
+  role,
+  invite_status: 'accepted',
+});
+
+/** A staff_users row with its own auth user, optionally assigned to a branch. */
+export async function probeStaff(
+  f: RbacFixture,
+  role: 'receptionist' | 'barber',
+  branchId?: string,
+): Promise<{ staffId: string; authId: string }> {
+  const { authId, email } = await probeAuthUser(f);
+  const staff = staffUserRow(authId, email, role);
+  const staffId = staff.id;
+  await createRow(f, 'staff_users', staff, 'probe staff');
   trackDelete(f, 'staff_users', { id: staffId });
   if (branchId) {
     await createRow(
@@ -911,26 +948,10 @@ export async function probeTicket(
   at: At,
   over: Record<string, unknown> = {},
 ): Promise<string> {
-  const id = uid();
-  await createRow(
-    f,
-    'queue_tickets',
-    {
-      id,
-      ticket_number: `PB-RBACW-${hex(10)}`,
-      branch_id: branchOf(f, at),
-      customer_id: customerOf(f, at).customerId,
-      branch_service_id: serviceOf(f, at),
-      assigned_barber_id: barberOf(f, at),
-      state: 'completed',
-      completed_at: new Date().toISOString(),
-      created_by: 'staff',
-      ...over,
-    },
-    'probe ticket',
-  );
-  trackTicket(f, id);
-  return id;
+  const row = ticketRow(f, at, over);
+  await createRow(f, 'queue_tickets', row, 'probe ticket');
+  trackTicket(f, row.id);
+  return row.id;
 }
 
 /** Registers deletion of a ticket (and dependants) created by a write probe. */

@@ -1,7 +1,7 @@
 // tests/db/rbac/tables.ts
 // Intended read access per role for every public table and view. `expect` is the intent; `currently`
 // (with a gap id) records where the database differs today.
-import { PASSWORD, dateAt } from '../fixtures/appointments';
+import { dateAt } from '../fixtures/appointments';
 import {
   barberOf,
   branchOf,
@@ -11,6 +11,7 @@ import {
   freeHoursSlot,
   hex,
   otherBranch,
+  probeAuthUser,
   probeBarber,
   probeBranchService,
   probeRow,
@@ -18,7 +19,9 @@ import {
   probeStaff,
   probeTicket,
   serviceOf,
-  track,
+  serviceRow,
+  staffUserRow,
+  ticketRow,
   trackAppointment,
   trackBarber,
   trackBranch,
@@ -321,10 +324,20 @@ export interface WriteProbe {
   deleteTarget?: (f: RbacFixture, at: 'a' | 'b') => Promise<WriteTarget>;
   /** Error codes that mean "row security let the write through, a constraint then stopped it". */
   passCodes?: string[];
+  /** Error codes (besides 42501) that are a deliberate refusal, e.g. a trigger that raises because the
+   * caller cannot see the row it checks. */
+  refuseCodes?: string[];
+  /** Probe rows of different operations conflict, so a cached row of another operation is torn down
+   * before this one is used. */
+  exclusive?: boolean;
 }
 
 export interface WriteEntry {
   table: string;
+  /** Name shown in test output when a table has more than one entry. */
+  label?: string;
+  /** Only the insert operation is exercised (update and delete are covered by the main entry). */
+  insertOnly?: boolean;
   key: string;
   probe: WriteProbe;
   insert: PerRole<WriteScope>;
@@ -369,13 +382,18 @@ const row = <T extends Record<string, unknown>>(f: RbacFixture, table: string, r
   return r;
 };
 
+/** A random far-future half hour, so cached probe rows never overlap each other. */
+const apptTimes = () => {
+  const day = farDate();
+  return { scheduled_start: `${day}T10:00:00.000Z`, scheduled_end: `${day}T10:30:00.000Z` };
+};
+
 const apptRow = (f: RbacFixture, at: At) => ({
   id: uid(),
   customer_id: customerOf(f, at).customerId,
   branch_id: branchOf(f, at),
   branch_service_id: serviceOf(f, at),
-  scheduled_start: `${dateAt(60)}T10:00:00.000Z`,
-  scheduled_end: `${dateAt(60)}T10:30:00.000Z`,
+  ...apptTimes(),
   created_by: 'staff',
 });
 
@@ -431,11 +449,12 @@ const scheduleRow = (f: RbacFixture, at: At) => ({
   is_manual: true,
 });
 
-const weeklyRow = (f: RbacFixture, at: At) => ({
+/** `day` differs between the insert row and the target rows, which may exist at the same time. */
+const weeklyRow = (f: RbacFixture, at: At, day: number) => ({
   id: uid(),
   barber_id: barberOf(f, at),
   branch_id: branchOf(f, at),
-  day_of_week: 5,
+  day_of_week: day,
   shift_start: '09:00:00',
   shift_end: '17:00:00',
 });
@@ -456,11 +475,36 @@ const branchRow = (f: RbacFixture) => ({
   longitude: -0.18,
 });
 
-const serviceRow = (f: RbacFixture) => ({
+const auditRow = (f: RbacFixture, at: At) => ({
   id: uid(),
-  business_id: f.rows.businesses!.a[0]!,
-  name: `RBAC Probe Service ${hex()}`,
-  default_duration_minutes: 30,
+  actor_type: 'system',
+  action: 'rbac_write_probe',
+  entity_type: 'branch',
+  entity_id: branchOf(f, at),
+  result: 'success',
+});
+
+const feedbackRow = (f: RbacFixture, at: At, ticketId: string) => ({
+  id: uid(),
+  ticket_id: ticketId,
+  customer_id: customerOf(f, at).customerId,
+  branch_id: branchOf(f, at),
+  barber_id: barberOf(f, at),
+  overall_rating: 5,
+});
+
+const eventRow = (ticketId: string) => ({
+  id: uid(),
+  ticket_id: ticketId,
+  event_type: 'rbac_write_probe',
+  actor_type: 'system',
+});
+
+const priceRow = (branchServiceId: string) => ({
+  id: uid(),
+  branch_service_id: branchServiceId,
+  price_ghs: 10,
+  effective_from: dateAt(0),
 });
 
 const sessionRow = (f: RbacFixture, at: At, ticketId: string) => ({
@@ -470,18 +514,18 @@ const sessionRow = (f: RbacFixture, at: At, ticketId: string) => ({
   started_at: new Date().toISOString(),
 });
 
-const ticketRow = (f: RbacFixture, at: At, over: Record<string, unknown> = {}) => ({
-  id: uid(),
-  ticket_number: `PB-RBACW-${hex(10)}`,
-  branch_id: branchOf(f, at),
-  customer_id: customerOf(f, at).customerId,
-  branch_service_id: serviceOf(f, at),
-  assigned_barber_id: barberOf(f, at),
-  state: 'completed',
-  completed_at: new Date().toISOString(),
-  created_by: 'staff',
-  ...over,
-});
+/** What a customer joining the queue sends: waiting, created by the customer, no barber yet. */
+const WAITING = {
+  state: 'waiting',
+  created_by: 'customer',
+  assigned_barber_id: null,
+  completed_at: null,
+};
+
+const TICKET_INSERT = w(
+  { customer: 'own', ...STAFF_BRANCH },
+  'edit_tickets; a customer joins the queue for themselves',
+);
 
 /** A capability row made by the admin client. */
 async function probeCapability(f: RbacFixture): Promise<string> {
@@ -525,24 +569,9 @@ export const WRITES: WriteEntry[] = [
     table: 'audit_log',
     key: 'id',
     probe: {
-      insert: async (f, at) =>
-        row(f, 'audit_log', {
-          id: uid(),
-          actor_type: 'system',
-          action: 'rbac_write_probe',
-          entity_type: 'branch',
-          entity_id: branchOf(f, at),
-          result: 'success',
-        }),
+      insert: async (f, at) => row(f, 'audit_log', auditRow(f, at)),
       target: async (f, at) => {
-        const r = await probeRow(f, 'audit_log', {
-          id: uid(),
-          actor_type: 'system',
-          action: 'rbac_write_probe',
-          entity_type: 'branch',
-          entity_id: branchOf(f, at),
-          result: 'success',
-        });
+        const r = await probeRow(f, 'audit_log', auditRow(f, at));
         return { key: r.id as string, column: 'result', value: 'failure' };
       },
     },
@@ -661,9 +690,13 @@ export const WRITES: WriteEntry[] = [
     table: 'barber_weekly_hours',
     key: 'id',
     probe: {
-      insert: async (f, at) => row(f, 'barber_weekly_hours', weeklyRow(f, at)),
+      insert: async (f, at) => row(f, 'barber_weekly_hours', weeklyRow(f, at, 5)),
       target: async (f, at) => {
-        const r = await probeRow(f, 'barber_weekly_hours', weeklyRow(f, at));
+        const r = await probeRow(f, 'barber_weekly_hours', weeklyRow(f, at, 6));
+        return { key: r.id as string, column: 'shift_end', value: '18:00:00' };
+      },
+      deleteTarget: async (f, at) => {
+        const r = await probeRow(f, 'barber_weekly_hours', weeklyRow(f, at, 4));
         return { key: r.id as string, column: 'shift_end', value: '18:00:00' };
       },
     },
@@ -719,6 +752,8 @@ export const WRITES: WriteEntry[] = [
     table: 'branch_hours',
     key: 'id',
     probe: {
+      // Every probe takes the same Saturday slot of the branch, so they cannot coexist.
+      exclusive: true,
       insert: async (f, at) => {
         await freeHoursSlot(f, branchOf(f, at));
         return row(f, 'branch_hours', hoursRow(f, at));
@@ -739,21 +774,11 @@ export const WRITES: WriteEntry[] = [
     probe: {
       insert: async (f, at) => {
         const bs = await probeBranchService(f, at);
-        return row(f, 'branch_service_prices', {
-          id: uid(),
-          branch_service_id: bs,
-          price_ghs: 10,
-          effective_from: dateAt(0),
-        });
+        return row(f, 'branch_service_prices', priceRow(bs));
       },
       target: async (f, at) => {
         const bs = await probeBranchService(f, at);
-        const r = await probeRow(f, 'branch_service_prices', {
-          id: uid(),
-          branch_service_id: bs,
-          price_ghs: 10,
-          effective_from: dateAt(0),
-        });
+        const r = await probeRow(f, 'branch_service_prices', priceRow(bs));
         return { key: r.id as string, column: 'price_ghs', value: 99 };
       },
     },
@@ -914,25 +939,11 @@ export const WRITES: WriteEntry[] = [
     probe: {
       insert: async (f, at) => {
         const ticket_id = await probeTicket(f, at);
-        return row(f, 'feedback', {
-          id: uid(),
-          ticket_id,
-          customer_id: customerOf(f, at).customerId,
-          branch_id: branchOf(f, at),
-          barber_id: barberOf(f, at),
-          overall_rating: 5,
-        });
+        return row(f, 'feedback', feedbackRow(f, at, ticket_id));
       },
       target: async (f, at) => {
         const ticket_id = await probeTicket(f, at);
-        const r = await probeRow(f, 'feedback', {
-          id: uid(),
-          ticket_id,
-          customer_id: customerOf(f, at).customerId,
-          branch_id: branchOf(f, at),
-          barber_id: barberOf(f, at),
-          overall_rating: 5,
-        });
+        const r = await probeRow(f, 'feedback', feedbackRow(f, at, ticket_id));
         return { key: r.id as string, column: 'comment', value: 'rbac changed' };
       },
     },
@@ -944,6 +955,9 @@ export const WRITES: WriteEntry[] = [
     table: 'notifications',
     key: 'id',
     probe: {
+      // A trigger checks the recipient exists in customers, as the caller: staff and other customers
+      // cannot see that row, so it raises P0001 "recipient_id ... does not exist in customers".
+      refuseCodes: ['P0001'],
       insert: async (f, at) => row(f, 'notifications', noteRow(f, at)),
       target: async (f, at) => {
         const r = await probeRow(f, 'notifications', noteRow(f, at));
@@ -974,21 +988,11 @@ export const WRITES: WriteEntry[] = [
     probe: {
       insert: async (f, at) => {
         const ticket_id = await probeTicket(f, at);
-        return row(f, 'queue_events', {
-          id: uid(),
-          ticket_id,
-          event_type: 'rbac_write_probe',
-          actor_type: 'system',
-        });
+        return row(f, 'queue_events', eventRow(ticket_id));
       },
       target: async (f, at) => {
         const ticket_id = await probeTicket(f, at);
-        const r = await probeRow(f, 'queue_events', {
-          id: uid(),
-          ticket_id,
-          event_type: 'rbac_write_probe',
-          actor_type: 'system',
-        });
+        const r = await probeRow(f, 'queue_events', eventRow(ticket_id));
         return { key: r.id as string, column: 'event_type', value: 'rbac_changed' };
       },
     },
@@ -1000,20 +1004,25 @@ export const WRITES: WriteEntry[] = [
     table: 'queue_tickets',
     key: 'id',
     probe: {
+      // A waiting ticket and the update target are both "active" for the same customer and branch,
+      // which the database allows only once, so these probes cannot coexist.
+      exclusive: true,
       insert: async (f, at) => {
-        const r = ticketRow(f, at);
+        const r = ticketRow(f, at, WAITING);
         trackTicket(f, r.id);
         return r;
       },
       target: async (f, at) => {
+        // Keeps its assigned barber, so a barber's own-queue update can be probed.
         const id = await probeTicket(f, at, { state: 'waiting', completed_at: null });
         return { key: id, column: 'state', value: 'cancelled' };
       },
+      deleteTarget: async (f, at) => {
+        const id = await probeTicket(f, at);
+        return { key: id, column: 'state', value: 'cancelled' };
+      },
     },
-    insert: w(
-      { customer: 'own', ...STAFF_BRANCH },
-      'edit_tickets; a customer joins the queue for themselves',
-    ),
+    insert: TICKET_INSERT,
     update: w(
       { customer: 'own', barber: 'own', ...STAFF_BRANCH },
       'edit_tickets; customer cancels their own; barber their own queue',
@@ -1026,6 +1035,33 @@ export const WRITES: WriteEntry[] = [
       ['owner'],
       { currently: 'all', gap: 'G-ticket-delete' },
     ),
+  },
+  {
+    // A customer inserting a ticket that is already completed, staff-created and assigned: not a real
+    // queue join, so the intended access is deny.
+    table: 'queue_tickets',
+    label: 'queue_tickets_forged',
+    key: 'id',
+    insertOnly: true,
+    probe: {
+      insert: async (f, at) => {
+        const r = ticketRow(f, at);
+        trackTicket(f, r.id);
+        return r;
+      },
+      target: async (f, at) => {
+        const id = await probeTicket(f, at);
+        return { key: id, column: 'state', value: 'cancelled' };
+      },
+    },
+    insert: patchW(TICKET_INSERT, ['customer'], {
+      expect: 'deny',
+      why: 'a customer can only join the queue (waiting, created by the customer), not write a finished ticket',
+      currently: 'own',
+      gap: 'G-ticket-customer-forge',
+    }),
+    update: NOBODY('covered by queue_tickets'),
+    delete: NOBODY('covered by queue_tickets'),
   },
   {
     table: 'role_capabilities',
@@ -1140,26 +1176,8 @@ export const WRITES: WriteEntry[] = [
     key: 'id',
     probe: {
       insert: async (f) => {
-        const email = `rbac-probe-${hex(12)}@test.pixelbarber.local`;
-        const auth = await f.admin.auth.admin.createUser({
-          email,
-          password: PASSWORD,
-          email_confirm: true,
-        });
-        if (auth.error) throw new Error(`probe auth user: ${auth.error.message}`);
-        const authId = auth.data.user!.id;
-        track(f, async () => {
-          const r = await f.admin.auth.admin.deleteUser(authId);
-          if (r.error) throw new Error(`undo auth user: ${r.error.message}`);
-        });
-        return row(f, 'staff_users', {
-          id: uid(),
-          auth_user_id: authId,
-          name: 'RBAC Probe',
-          email,
-          role: 'receptionist',
-          invite_status: 'accepted',
-        });
+        const { authId, email } = await probeAuthUser(f);
+        return row(f, 'staff_users', staffUserRow(authId, email, 'receptionist'));
       },
       target: async (f, at) => {
         const { staffId } = await probeStaff(f, 'receptionist', branchOf(f, at));
