@@ -215,6 +215,16 @@ describe('list_customers', () => {
     expect(byDigits.rows.map((x: J) => x.id)).toEqual([cust(0).customerId]);
   });
 
+  it('lets masked callers find a phone only by the full number', async () => {
+    const partial = (await list(analyst.client, [f.branchId], local(cust(0).phone).slice(0, 6)))
+      .data as J;
+    expect(partial.rows).toEqual([]);
+    const full = (await list(analyst.client, [f.branchId], local(cust(0).phone))).data as J;
+    expect(full.rows.map((x: J) => x.id)).toEqual([cust(0).customerId]);
+    const fullDigits = (await list(analyst.client, [f.branchId], cust(0).phone.slice(1))).data as J;
+    expect(fullDigits.rows.map((x: J) => x.id)).toEqual([cust(0).customerId]);
+  });
+
   it('filters by group and pages by offset', async () => {
     const lapsed = (await list(manager.client, [f.branchId], null, 'lapsed')).data as J;
     expect(lapsed.rows.map((x: J) => x.id)).toEqual([cust(1).customerId]);
