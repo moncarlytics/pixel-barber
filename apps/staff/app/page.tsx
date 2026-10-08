@@ -13,6 +13,7 @@ export default function Home() {
 
   const [canViewReports, setCanViewReports] = useState(false);
   const [canViewDashboard, setCanViewDashboard] = useState(false);
+  const [canViewCustomers, setCanViewCustomers] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(data.session !== null));
@@ -22,6 +23,9 @@ export default function Home() {
     supabase
       .rpc('has_capability', { cap: 'view_branch_dashboard' })
       .then(({ data }) => setCanViewDashboard(data === true));
+    supabase
+      .rpc('has_capability', { cap: 'view_customers' })
+      .then(({ data }) => setCanViewCustomers(data === true));
   }, [supabase]);
 
   return (
@@ -30,6 +34,7 @@ export default function Home() {
       {signedIn === false && <Link href="/login">{t('logIn')}</Link>}
       {canViewDashboard && <Link href="/today">{t('todayLink')}</Link>}
       {canViewReports && <Link href="/reports">{t('reportsLink')}</Link>}
+      {canViewCustomers && <Link href="/customers">{t('customersLink')}</Link>}
       <Link href="/settings/branch">Branch Settings</Link>
       <Link href="/settings/services">Services & Pricing</Link>
       <Link href="/settings/barbers">{t('barbersLink')}</Link>
