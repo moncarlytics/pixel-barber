@@ -81,6 +81,13 @@ export function buildPushPayload(type: SmsNotificationType, n: ClaimedNotificati
       };
     case 'feedback_request':
       return { ...base, url: ticketUrl, body: `How was your cut at ${branch}? Tap to rate.` };
+    case 'staff_message':
+      return {
+        title: `Pixel Barber · ${branch}`,
+        tag: n.notification_id,
+        url: '/',
+        body: n.message_text ?? '',
+      };
   }
 }
 

@@ -175,3 +175,23 @@ describe('feedback_request push', () => {
     expect(pushUrgency('feedback_request')).toBe('normal');
   });
 });
+
+describe('staff_message push', () => {
+  it('shows the branch in the title and the message as the body, opening the app', () => {
+    const n = row({
+      notification_type: 'staff_message',
+      ticket_id: null,
+      ticket_state: null,
+      ticket_number: null,
+      branch_name: 'Osu Branch',
+      message_text: 'Your barber is running 15 minutes late.',
+    });
+    expect(buildPushPayload('staff_message', n)).toEqual({
+      title: 'Pixel Barber · Osu Branch',
+      body: 'Your barber is running 15 minutes late.',
+      url: '/',
+      tag: 'n1',
+    });
+    expect(pushUrgency('staff_message')).toBe('normal');
+  });
+});

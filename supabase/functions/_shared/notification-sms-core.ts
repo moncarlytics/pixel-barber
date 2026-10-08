@@ -31,6 +31,7 @@ export const SMS_NOTIFICATION_TYPES = [
   'appointment_reminder_day',
   'appointment_reminder_hour',
   'feedback_request',
+  'staff_message',
 ] as const;
 export type SmsNotificationType = (typeof SMS_NOTIFICATION_TYPES)[number];
 export const DISPATCH_BATCH_SIZE = 50;
@@ -74,11 +75,15 @@ export interface ClaimedNotification {
   push_subscriptions?: PushTarget[] | null;
   /** feedback_request only: whether the visit has already been rated. */
   ticket_has_feedback?: boolean | null;
+  /** staff_message only: the text a staff member wrote (payload->>'text'). */
+  message_text?: string | null;
 }
 
 /** A ticket notification whose ticket has moved on, or a reminder whose appointment is no longer
  * booked or has moved to another slot. */
 function isStale(n: ClaimedNotification): boolean {
+  // A staff message stands alone (no ticket or appointment); only a missing text makes it unusable.
+  if (n.notification_type === 'staff_message') return !n.message_text;
   if (REMINDER_TYPES.has(n.notification_type)) {
     if (!n.appointment_id || !n.appointment_status) return true;
     if (!SENDABLE_APPOINTMENT_STATES.has(n.appointment_status)) return true;
@@ -172,7 +177,7 @@ export function formatReminderTime(iso: string): string {
 /** The text for one enabled notification type. */
 export function buildNotificationSms(
   type: SmsNotificationType,
-  input: { branchName: string; ticketNumber: string; link: string; slot?: string },
+  input: { branchName: string; ticketNumber: string; link: string; slot?: string; text?: string },
 ): string {
   switch (type) {
     case 'youre_next':
@@ -187,6 +192,8 @@ export function buildNotificationSms(
       return `Pixel Barber: Your appointment at ${input.branchName} is today at ${formatReminderTime(input.slot ?? '')}, in about an hour.`;
     case 'feedback_request':
       return `Pixel Barber: How was your cut at ${input.branchName}? Rate your visit: ${input.link}`;
+    case 'staff_message':
+      return `Pixel Barber (${input.branchName}): ${input.text ?? ''}`;
   }
 }
 

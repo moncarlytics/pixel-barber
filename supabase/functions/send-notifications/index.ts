@@ -194,6 +194,7 @@ Deno.serve(async (req) => {
       ticketNumber: n.ticket_number ?? '',
       link: n.ticket_id ? ticketLink(customerAppUrl, n.ticket_id) : '',
       slot: n.appointment_slot ?? undefined,
+      text: n.message_text ?? undefined,
     });
     const result = await sendArkeselSms(n.phone_e164!, message, arkesel);
 

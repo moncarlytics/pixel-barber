@@ -198,6 +198,7 @@ describe('your_turn and ticket_released', () => {
       'appointment_reminder_day',
       'appointment_reminder_hour',
       'feedback_request',
+      'staff_message',
     ]);
   });
 
@@ -446,5 +447,47 @@ describe('feedback_request', () => {
     ).toBe(
       'Pixel Barber: How was your cut at Osu Branch? Rate your visit: https://app.example/tickets/t1',
     );
+  });
+});
+
+describe('staff_message', () => {
+  const message = (overrides: Partial<ClaimedNotification> = {}) =>
+    row({
+      notification_type: 'staff_message',
+      ticket_id: null,
+      ticket_state: null,
+      ticket_number: null,
+      branch_name: 'Osu Branch',
+      message_text: 'Your barber is running 15 minutes late.',
+      created_at: '2026-10-08T12:00:00Z',
+      ...overrides,
+    });
+
+  it('is claimed by the sender', () => {
+    expect(SMS_NOTIFICATION_TYPES).toContain('staff_message');
+  });
+
+  it('is never stale while it has text, and expires like the rest', () => {
+    expect(precheckNotification(message(), new Date('2026-10-08T12:05:00Z'))).toEqual({
+      action: 'continue',
+    });
+    expect(
+      precheckNotification(message({ message_text: null }), new Date('2026-10-08T12:05:00Z')),
+    ).toEqual({ action: 'skip', reason: 'stale' });
+    expect(precheckNotification(message(), new Date('2026-10-08T12:11:00Z'))).toEqual({
+      action: 'skip',
+      reason: 'expired',
+    });
+  });
+
+  it('texts the branch and the message', () => {
+    expect(
+      buildNotificationSms('staff_message', {
+        branchName: 'Osu Branch',
+        ticketNumber: '',
+        link: '',
+        text: 'Your barber is running 15 minutes late.',
+      }),
+    ).toBe('Pixel Barber (Osu Branch): Your barber is running 15 minutes late.');
   });
 });
