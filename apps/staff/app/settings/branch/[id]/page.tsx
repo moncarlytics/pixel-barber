@@ -21,6 +21,9 @@ export default function BranchEditPage() {
   const [newClosureReason, setNewClosureReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [longWait, setLongWait] = useState('20');
+  const [longWaitError, setLongWaitError] = useState<string | null>(null);
+  const [longWaitSaved, setLongWaitSaved] = useState(false);
 
   async function load() {
     const [{ data: branchRow }, { data: hourRows }, { data: closureRows }] = await Promise.all([
@@ -29,6 +32,7 @@ export default function BranchEditPage() {
       supabase.from('branch_closures').select('*').eq('branch_id', params.id),
     ]);
     setBranch(branchRow ?? null);
+    if (branchRow) setLongWait(String(branchRow.long_wait_warning_minutes));
 
     const existingByDay = new Map((hourRows ?? []).map((h) => [h.day_of_week, h]));
     const allDays: BranchHour[] = [0, 1, 2, 3, 4, 5, 6].map(
@@ -75,6 +79,28 @@ export default function BranchEditPage() {
       return;
     }
     setSaved(true);
+  }
+
+  async function handleSaveLongWait(e: React.FormEvent) {
+    e.preventDefault();
+    setLongWaitError(null);
+    setLongWaitSaved(false);
+    const minutes = Number(longWait);
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 180) {
+      setLongWaitError(t('longWaitInvalid'));
+      return;
+    }
+    const { error: rpcError } = await supabase.rpc('set_long_wait_warning', {
+      p_branch_id: params.id,
+      p_minutes: minutes,
+    });
+    if (rpcError) {
+      setLongWaitError(
+        rpcError.message === 'invalid_minutes' ? t('longWaitInvalid') : rpcError.message,
+      );
+      return;
+    }
+    setLongWaitSaved(true);
   }
 
   async function handleSaveHours(e: React.FormEvent) {
@@ -165,6 +191,21 @@ export default function BranchEditPage() {
           onChange={(e) => setBranch({ ...branch, geofence_radius_m: Number(e.target.value) })}
         />
         <button type="submit">{t('save')}</button>
+      </form>
+
+      <form onSubmit={handleSaveLongWait}>
+        <label htmlFor="long-wait">{t('longWait')}</label>
+        <input
+          id="long-wait"
+          type="number"
+          min={5}
+          max={180}
+          value={longWait}
+          onChange={(e) => setLongWait(e.target.value)}
+        />
+        <button type="submit">{t('saveLongWait')}</button>
+        {longWaitError && <p role="alert">{longWaitError}</p>}
+        {longWaitSaved && <p>{t('longWaitSaved')}</p>}
       </form>
 
       <h2>{t('hoursTitle')}</h2>

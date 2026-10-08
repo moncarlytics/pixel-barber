@@ -5,7 +5,9 @@
     "barbersLink": "Barbers",
     "staffLink": "Staff & Roles",
     "appointmentsLink": "Appointments",
-    "feedbackLink": "Feedback"
+    "feedbackLink": "Feedback",
+    "todayLink": "Today",
+    "reportsLink": "Reports"
   },
   "Header": {
     "logOut": "Log out"
@@ -61,7 +63,11 @@
       "5": "Friday",
       "6": "Saturday"
     },
-    "noBusinessFound": "No business row found."
+    "noBusinessFound": "No business row found.",
+    "longWait": "Long wait warning (minutes)",
+    "longWaitInvalid": "Enter a number from 5 to 180.",
+    "saveLongWait": "Save warning",
+    "longWaitSaved": "Warning saved"
   },
   "ServicesPricing": {
     "title": "Services & Pricing",
@@ -356,5 +362,32 @@
     "stars": "{count, plural, one {# star} other {# stars}}",
     "details": "Service {service} · Professionalism {professionalism} · Waiting {waiting} · Cleanliness {cleanliness} · Value {value}",
     "line": "{date} · {customer} · {barber} · {service}"
+  },
+  "Today": {
+    "title": "Today",
+    "branch": "Branch",
+    "noAccess": "You don't have access to this page.",
+    "loadFailed": "Couldn't load the dashboard.",
+    "noBranches": "You don't manage any branches.",
+    "longWait": "Waits are long: people have waited {minutes} min on average (limit {limit} min).",
+    "nowTitle": "Right now",
+    "waiting": "Waiting",
+    "called": "Called",
+    "inService": "In service",
+    "appointmentsToCome": "Appointments still to come",
+    "barbersAvailable": "Barbers available",
+    "barbersBusy": "Barbers busy",
+    "todayTitle": "So far today",
+    "served": "Served",
+    "walkIns": "Walk-ins",
+    "appointments": "Appointments",
+    "noShows": "No-shows",
+    "cancellations": "Cancellations",
+    "avgWait": "Average wait",
+    "avgService": "Average haircut time",
+    "ratingsTitle": "Ratings today",
+    "ratings": "{count, plural, one {# rating} other {# ratings}} · {average} average",
+    "ratingsNone": "No ratings yet",
+    "updated": "Updated {time}"
   }
 }

@@ -12,18 +12,24 @@ export default function Home() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
 
   const [canViewReports, setCanViewReports] = useState(false);
+  const [canViewDashboard, setCanViewDashboard] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSignedIn(data.session !== null));
     supabase
       .rpc('has_capability', { cap: 'view_branch_reports' })
       .then(({ data }) => setCanViewReports(data === true));
+    supabase
+      .rpc('has_capability', { cap: 'view_branch_dashboard' })
+      .then(({ data }) => setCanViewDashboard(data === true));
   }, [supabase]);
 
   return (
     <main>
       <h1>{t('title')}</h1>
       {signedIn === false && <Link href="/login">{t('logIn')}</Link>}
+      {canViewDashboard && <Link href="/today">{t('todayLink')}</Link>}
+      {canViewReports && <Link href="/reports">{t('reportsLink')}</Link>}
       <Link href="/settings/branch">Branch Settings</Link>
       <Link href="/settings/services">Services & Pricing</Link>
       <Link href="/settings/barbers">{t('barbersLink')}</Link>
