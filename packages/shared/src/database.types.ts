@@ -1538,6 +1538,7 @@ export type Database = {
           push_enabled: boolean | null;
           push_subscriptions: Json;
           ticket_has_feedback: boolean | null;
+          message_text: string | null;
         }[];
       };
       custom_access_token_hook: { Args: { event: Json }; Returns: Json };

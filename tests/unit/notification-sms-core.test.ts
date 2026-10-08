@@ -190,7 +190,7 @@ describe('message building', () => {
 });
 
 describe('your_turn and ticket_released', () => {
-  it('enables all five types', () => {
+  it('enables every notification type', () => {
     expect([...SMS_NOTIFICATION_TYPES]).toEqual([
       'youre_next',
       'your_turn',
