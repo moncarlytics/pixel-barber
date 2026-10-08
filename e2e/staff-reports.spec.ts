@@ -4,7 +4,8 @@
 // the files. One shared seed; clicks use Enter; page content is in <main>.
 import { config } from 'dotenv';
 config({ path: '.env.local' });
-import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@pixel-barber/shared';
 
@@ -38,6 +39,20 @@ async function logIn(page: Page) {
   await page.getByPlaceholder('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log In' }).press('Enter');
   await page.waitForURL(/\/tickets/, { timeout: 15000 });
+}
+
+async function openReport(page: Page): Promise<Locator> {
+  await page.goto(`${STAFF}/reports`);
+  const main = page.locator('main');
+  await main.getByLabel('Branch', { exact: true }).selectOption(seed.branchId!);
+  // exact: the summary groups' names ("Customers served", "Returning customers") contain "to".
+  await main.getByLabel('Period', { exact: true }).selectOption('custom');
+  await main.getByLabel('From', { exact: true }).fill(visitDay);
+  await main.getByLabel('To', { exact: true }).fill(visitDay);
+  await expect(main.getByRole('group', { name: 'Customers served' })).toContainText('1', {
+    timeout: 15000,
+  });
+  return main;
 }
 
 test.describe.serial('today dashboard and reports', () => {
@@ -204,5 +219,26 @@ test.describe.serial('today dashboard and reports', () => {
     ).toBeVisible({ timeout: 15000 });
     await expect(main.getByRole('group', { name: 'Waiting' })).toContainText('1');
     await expect(main.getByRole('group', { name: 'Served' })).toContainText('0');
+  });
+
+  test('a branch manager opens Reports and downloads a table as CSV', async ({ page }) => {
+    test.setTimeout(120_000);
+    await logIn(page);
+    const main = await openReport(page);
+    await expect(main.getByRole('group', { name: 'Estimated takings' })).toContainText(
+      'GHS 50.00 (estimated)',
+    );
+    const barbers = main.getByRole('region', { name: 'Barbers' });
+    await expect(barbers).toContainText('SRP E2E Barber');
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      barbers.getByRole('button', { name: 'Download CSV' }).press('Enter'),
+    ]);
+    expect(download.suggestedFilename()).toBe(`pixel-barber-barbers-${visitDay}-${visitDay}.csv`);
+    const csv = readFileSync((await download.path())!, 'utf8').replace(/^﻿/, '');
+    expect(csv.split('\r\n')[0]).toBe(
+      'Barber,Served,Average haircut time,No-shows,Average rating,Estimated takings',
+    );
+    expect(csv.split('\r\n')[1]).toBe('SRP E2E Barber,1,30,0,,50');
   });
 });
