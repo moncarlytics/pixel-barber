@@ -3,7 +3,8 @@
 // Main, branch B = Closed; barbers A and B at A; customers 0-3) and adds an Owner, a Manager /
 // Receptionist / Analyst at A, an "other" Manager at B, a barber C at B, an anonymous client, and one
 // row per probed table at each branch. Not a test file itself (vitest only collects *.test.ts).
-import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@pixel-barber/shared';
 import {
   PASSWORD,
@@ -12,6 +13,7 @@ import {
   createAppointmentFixture,
   createStaffLogin,
   dateAt,
+  deleteAppointmentsByIds,
   type AppointmentFixture,
   type Client,
 } from '../fixtures/appointments';
@@ -31,6 +33,8 @@ export interface RbacFixture {
   logins: { authUserId: string; staffUserId: string }[];
   customerIds: string[];
   created: Created;
+  /** Probe rows made by the write checks; undone last-in first-out by runUndo. */
+  undo: (() => Promise<void>)[];
 }
 
 interface Created {
@@ -634,10 +638,12 @@ async function build(setup: Setup): Promise<RbacFixture> {
     logins,
     customerIds: setup.customerIds,
     created,
+    undo: [],
   };
 }
 
 export async function cleanupRbacFixture(f: RbacFixture): Promise<void> {
+  await runUndo(f);
   await cleanupSetup(
     {
       base: f.base,
@@ -714,4 +720,279 @@ async function cleanupSetup(s: Setup, strict: boolean): Promise<void> {
   await run('branch_closures', admin.from('branch_closures').delete().in('id', created.closures));
   for (const login of s.logins) await cleanupStaffLogin(base, login);
   await cleanupAppointmentFixture(base);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Probe helpers for the write checks. Every row they create is registered with `track`, and
+// `runUndo` deletes them last-in first-out (throwing on failure).
+// ---------------------------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Loose = SupabaseClient<any, any, any>;
+export const loose = (f: RbacFixture): Loose => f.admin as unknown as Loose;
+
+export type At = 'a' | 'b';
+export const branchOf = (f: RbacFixture, at: At) =>
+  at === 'a' ? f.base.branchId : f.base.closedBranchId;
+export const serviceOf = (f: RbacFixture, at: At) =>
+  at === 'a' ? f.base.branchServiceId : f.base.closedBranchServiceId;
+export const customerOf = (f: RbacFixture, at: At) => f.base.customers[at === 'a' ? 0 : 1]!;
+export const barberOf = (f: RbacFixture, at: At) =>
+  at === 'a' ? f.base.barberA.barberId : f.barberC.barberId;
+export const otherBranch = (f: RbacFixture, at: At) => branchOf(f, at === 'a' ? 'b' : 'a');
+export const uid = () => randomUUID();
+export const hex = (n = 8) => uid().replace(/-/g, '').slice(0, n);
+/** A far-future date (YYYY-MM-DD) unlikely to collide with anything. */
+export const farDate = () => dateAt(100 + Math.floor(Math.random() * 600));
+
+export function track(f: RbacFixture, undo: () => Promise<void>) {
+  f.undo.push(undo);
+}
+
+export async function runUndo(f: RbacFixture): Promise<void> {
+  let first: unknown;
+  while (f.undo.length > 0) {
+    const undo = f.undo.pop()!;
+    try {
+      await undo();
+    } catch (e) {
+      first ??= e;
+    }
+  }
+  if (first) throw first instanceof Error ? first : new Error(String(first));
+}
+
+/** Registers deletion of the rows matching `match` (rows already gone are fine). */
+export function trackDelete(f: RbacFixture, table: string, match: Record<string, unknown>) {
+  track(f, async () => {
+    const r = await loose(f).from(table).delete().match(match);
+    if (r.error) throw new Error(`undo ${table}: ${r.error.message}`);
+  });
+}
+
+export async function createRow(
+  f: RbacFixture,
+  table: string,
+  row: Record<string, unknown>,
+  what: string,
+): Promise<void> {
+  const r = await loose(f).from(table).insert(row);
+  if (r.error) throw new Error(`${what}: ${r.error.message}`);
+}
+
+/** Admin-creates a row and registers its deletion (by id when it has one, else by the whole row). */
+export async function probeRow(
+  f: RbacFixture,
+  table: string,
+  row: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  await createRow(f, table, row, `probe ${table}`);
+  trackDelete(f, table, 'id' in row ? { id: row.id } : row);
+  return row;
+}
+
+export async function probeService(f: RbacFixture): Promise<string> {
+  const id = uid();
+  const business = f.rows.businesses!.a[0]!;
+  await createRow(
+    f,
+    'services',
+    {
+      id,
+      business_id: business,
+      name: `RBAC Probe Service ${hex()}`,
+      default_duration_minutes: 30,
+    },
+    'probe service',
+  );
+  trackDelete(f, 'services', { id });
+  return id;
+}
+
+/** A staff_users row with its own auth user, optionally assigned to a branch. */
+export async function probeStaff(
+  f: RbacFixture,
+  role: 'receptionist' | 'barber',
+  branchId?: string,
+): Promise<{ staffId: string; authId: string }> {
+  const email = `rbac-probe-${hex(12)}@test.pixelbarber.local`;
+  const auth = await f.admin.auth.admin.createUser({
+    email,
+    password: PASSWORD,
+    email_confirm: true,
+  });
+  check(auth, 'probe auth user');
+  const authId = auth.data.user!.id;
+  track(f, async () => {
+    const r = await f.admin.auth.admin.deleteUser(authId);
+    if (r.error) throw new Error(`undo auth user: ${r.error.message}`);
+  });
+  const staffId = uid();
+  await createRow(
+    f,
+    'staff_users',
+    {
+      id: staffId,
+      auth_user_id: authId,
+      name: 'RBAC Probe',
+      email,
+      role,
+      invite_status: 'accepted',
+    },
+    'probe staff',
+  );
+  trackDelete(f, 'staff_users', { id: staffId });
+  if (branchId) {
+    await createRow(
+      f,
+      'staff_branch_assignments',
+      { staff_user_id: staffId, branch_id: branchId },
+      'probe assignment',
+    );
+    trackDelete(f, 'staff_branch_assignments', { staff_user_id: staffId });
+  }
+  return { staffId, authId };
+}
+
+/** A throwaway barber (own staff user) with home branch `branchId`. */
+export async function probeBarber(
+  f: RbacFixture,
+  branchId: string,
+): Promise<{ barberId: string; staffId: string }> {
+  const { staffId } = await probeStaff(f, 'barber');
+  const barberId = uid();
+  await createRow(
+    f,
+    'barbers',
+    { id: barberId, staff_user_id: staffId, home_branch_id: branchId, status: 'available' },
+    'probe barber',
+  );
+  trackBarber(f, barberId);
+  return { barberId, staffId };
+}
+
+/** Registers removal of a barber and the rows that hang off it. */
+export function trackBarber(f: RbacFixture, barberId: string) {
+  track(f, async () => {
+    for (const table of [
+      'barber_schedule',
+      'barber_skills',
+      'barber_weekly_hours',
+      'barber_days_off',
+      'barber_service_stats',
+    ]) {
+      const r = await loose(f).from(table).delete().eq('barber_id', barberId);
+      if (r.error) throw new Error(`undo barber ${table}: ${r.error.message}`);
+    }
+    const r = await loose(f).from('barbers').delete().eq('id', barberId);
+    if (r.error) throw new Error(`undo barbers: ${r.error.message}`);
+  });
+}
+
+/** Removes a ticket and everything that can point at it. */
+async function deleteTicketDeep(f: RbacFixture, id: string): Promise<void> {
+  const db = loose(f);
+  const steps: [string, string][] = [
+    ['queue_events', 'ticket_id'],
+    ['notifications', 'related_ticket_id'],
+    ['feedback', 'ticket_id'],
+    ['service_sessions', 'ticket_id'],
+    ['queue_tickets', 'id'],
+  ];
+  for (const [table, col] of steps) {
+    const r = await db.from(table).delete().eq(col, id);
+    if (r.error) throw new Error(`undo ticket ${table}: ${r.error.message}`);
+  }
+}
+
+/** A throwaway ticket at branch `at`: customer 0 (A) or 1 (B), assigned barber A (A) or C (B). */
+export async function probeTicket(
+  f: RbacFixture,
+  at: At,
+  over: Record<string, unknown> = {},
+): Promise<string> {
+  const id = uid();
+  await createRow(
+    f,
+    'queue_tickets',
+    {
+      id,
+      ticket_number: `PB-RBACW-${hex(10)}`,
+      branch_id: branchOf(f, at),
+      customer_id: customerOf(f, at).customerId,
+      branch_service_id: serviceOf(f, at),
+      assigned_barber_id: barberOf(f, at),
+      state: 'completed',
+      completed_at: new Date().toISOString(),
+      created_by: 'staff',
+      ...over,
+    },
+    'probe ticket',
+  );
+  trackTicket(f, id);
+  return id;
+}
+
+/** Registers deletion of a ticket (and dependants) created by a write probe. */
+export function trackTicket(f: RbacFixture, id: string) {
+  track(f, () => deleteTicketDeep(f, id));
+}
+
+export function trackAppointment(f: RbacFixture, id: string) {
+  track(f, () => deleteAppointmentsByIds(f.admin, [id]));
+}
+
+/** Removes a branch and its dependent rows (hours, closures, counters). */
+export function trackBranch(f: RbacFixture, id: string) {
+  track(f, async () => {
+    for (const table of ['branch_hours', 'branch_closures', 'branch_ticket_counters']) {
+      const r = await loose(f).from(table).delete().eq('branch_id', id);
+      if (r.error) throw new Error(`undo branch ${table}: ${r.error.message}`);
+    }
+    const r = await loose(f).from('branches').delete().eq('id', id);
+    if (r.error) throw new Error(`undo branches: ${r.error.message}`);
+  });
+}
+
+/** A branch_services row (with a throwaway service) at branch `at`. */
+export async function probeBranchService(f: RbacFixture, at: At): Promise<string> {
+  const serviceId = await probeService(f);
+  const id = uid();
+  await createRow(
+    f,
+    'branch_services',
+    { id, branch_id: branchOf(f, at), service_id: serviceId },
+    'probe branch service',
+  );
+  trackBranchService(f, id);
+  return id;
+}
+
+export function trackBranchService(f: RbacFixture, id: string) {
+  track(f, async () => {
+    const r1 = await loose(f).from('branch_service_prices').delete().eq('branch_service_id', id);
+    if (r1.error) throw new Error(`undo prices: ${r1.error.message}`);
+    const r = await loose(f).from('branch_services').delete().eq('id', id);
+    if (r.error) throw new Error(`undo branch_services: ${r.error.message}`);
+  });
+}
+
+/** Frees the Saturday hours slot at a branch (so a probe row can take it) and restores the original
+ * row afterwards. */
+export async function freeHoursSlot(f: RbacFixture, branchId: string): Promise<void> {
+  const db = loose(f);
+  const saved = must(
+    await db.from('branch_hours').select('*').eq('branch_id', branchId).eq('day_of_week', 6),
+    'branch_hours slot',
+  ) as Record<string, unknown>[];
+  const del = await db.from('branch_hours').delete().eq('branch_id', branchId).eq('day_of_week', 6);
+  if (del.error) throw new Error(`free branch_hours slot: ${del.error.message}`);
+  track(f, async () => {
+    const d = await db.from('branch_hours').delete().eq('branch_id', branchId).eq('day_of_week', 6);
+    if (d.error) throw new Error(`undo branch_hours: ${d.error.message}`);
+    if (saved.length > 0) {
+      const r = await db.from('branch_hours').insert(saved);
+      if (r.error) throw new Error(`restore branch_hours: ${r.error.message}`);
+    }
+  });
 }

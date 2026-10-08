@@ -1,6 +1,34 @@
 // tests/db/rbac/tables.ts
 // Intended read access per role for every public table and view. `expect` is the intent; `currently`
 // (with a gap id) records where the database differs today.
+import { PASSWORD, dateAt } from '../fixtures/appointments';
+import {
+  barberOf,
+  branchOf,
+  customerOf,
+  createRow,
+  farDate,
+  freeHoursSlot,
+  hex,
+  otherBranch,
+  probeBarber,
+  probeBranchService,
+  probeRow,
+  probeService,
+  probeStaff,
+  probeTicket,
+  serviceOf,
+  track,
+  trackAppointment,
+  trackBarber,
+  trackBranch,
+  trackBranchService,
+  trackDelete,
+  trackTicket,
+  uid,
+  type At,
+  type RbacFixture,
+} from './fixture';
 import {
   ROLES,
   type Expect,
@@ -8,6 +36,7 @@ import {
   type ReadScope,
   type Role,
   type TableEntry,
+  type WriteScope,
 } from './types';
 
 type Scopes = [
@@ -263,5 +292,882 @@ export const TABLES: TableEntry[] = [
       ['none', 'own', 'none', 'none', 'none', 'none', 'none', 'none'],
       'security invoker over customers',
     ),
+  },
+];
+
+// ---------------------------------------------------------------------------------------------
+// Writes
+// ---------------------------------------------------------------------------------------------
+
+export interface WriteTarget {
+  /** Value of the table's `key` column identifying the probe row. */
+  key: string;
+  /** A harmless column to change, and the new value (the admin client must then see it). */
+  column: string;
+  value: unknown;
+  /** Composite match when `key` alone does not identify one row (tables without an id column). */
+  match?: Record<string, unknown>;
+}
+
+export interface WriteProbe {
+  /** A row to insert at branch 'a' or 'b' (for customer/barber 'own' probes, 'a' is their own). Any
+   * prerequisite rows are created with the admin client and registered for removal. */
+  insert?: (f: RbacFixture, at: 'a' | 'b') => Promise<Record<string, unknown>>;
+  /** Creates (with admin) a throwaway row at 'a' or 'b'. For 'own' scopes 'a' is owned by the login
+   * (a few such rows are the shared fixture rows themselves: the runner restores the changed
+   * column afterwards). */
+  target: (f: RbacFixture, at: 'a' | 'b') => Promise<WriteTarget>;
+  /** A throwaway row to delete when `target` is a shared fixture row. */
+  deleteTarget?: (f: RbacFixture, at: 'a' | 'b') => Promise<WriteTarget>;
+  /** Error codes that mean "row security let the write through, a constraint then stopped it". */
+  passCodes?: string[];
+}
+
+export interface WriteEntry {
+  table: string;
+  key: string;
+  probe: WriteProbe;
+  insert: PerRole<WriteScope>;
+  update: PerRole<WriteScope>;
+  delete: PerRole<WriteScope>;
+}
+
+const w = (spec: Partial<Record<Role, WriteScope>>, why: string): PerRole<WriteScope> =>
+  Object.fromEntries(
+    ROLES.map((r) => [r, e<WriteScope>(spec[r] ?? 'deny', why)]),
+  ) as PerRole<WriteScope>;
+
+const patchW = (
+  row: PerRole<WriteScope>,
+  roles: Role[],
+  extra: Partial<Expect<WriteScope>>,
+): PerRole<WriteScope> => {
+  const out = { ...row };
+  for (const r of roles) out[r] = { ...row[r], ...extra };
+  return out;
+};
+
+const NOBODY = (why: string) => w({}, why);
+const SERVER = 'server-side only';
+/** manager and otherManager within their branch, owner everywhere. */
+const MANAGERS: Partial<Record<Role, WriteScope>> = {
+  manager: 'branch',
+  otherManager: 'branch',
+  owner: 'all',
+};
+const OWNER_ONLY: Partial<Record<Role, WriteScope>> = { owner: 'all' };
+const STAFF_BRANCH: Partial<Record<Role, WriteScope>> = {
+  receptionist: 'branch',
+  manager: 'branch',
+  otherManager: 'branch',
+  owner: 'all',
+};
+const MANAGERS_ROLES: Role[] = ['manager', 'otherManager'];
+
+const row = <T extends Record<string, unknown>>(f: RbacFixture, table: string, r: T): T => {
+  trackDelete(f, table, 'id' in r ? { id: r.id } : r);
+  return r;
+};
+
+const apptRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  customer_id: customerOf(f, at).customerId,
+  branch_id: branchOf(f, at),
+  branch_service_id: serviceOf(f, at),
+  scheduled_start: `${dateAt(60)}T10:00:00.000Z`,
+  scheduled_end: `${dateAt(60)}T10:30:00.000Z`,
+  created_by: 'staff',
+});
+
+const noteRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  recipient_type: 'customer',
+  recipient_id: customerOf(f, at).customerId,
+  channel: 'sms',
+  notification_type: 'staff_message',
+  payload: { text: 'rbac write probe', branch_id: branchOf(f, at) },
+  status: 'sent',
+});
+
+const consentRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  customer_id: customerOf(f, at).customerId,
+  consent_type: 'transactional',
+  granted: true,
+  source: 'rbac_probe',
+});
+
+const pushRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  customer_id: customerOf(f, at).customerId,
+  endpoint: `https://push.example/rbac-w-${hex(12)}`,
+  p256dh_key: 'rbac-key',
+  auth_key: 'rbac-auth',
+});
+
+const closureRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  branch_id: branchOf(f, at),
+  closure_date: farDate(),
+  reason: 'rbac write probe',
+});
+
+const hoursRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  branch_id: branchOf(f, at),
+  day_of_week: 6,
+  opens_at: '00:00:00',
+  closes_at: '23:59:59',
+  is_closed: false,
+});
+
+const scheduleRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  barber_id: barberOf(f, at),
+  work_date: farDate(),
+  branch_id: branchOf(f, at),
+  shift_start: '09:00:00',
+  shift_end: '17:00:00',
+  is_manual: true,
+});
+
+const weeklyRow = (f: RbacFixture, at: At) => ({
+  id: uid(),
+  barber_id: barberOf(f, at),
+  branch_id: branchOf(f, at),
+  day_of_week: 5,
+  shift_start: '09:00:00',
+  shift_end: '17:00:00',
+});
+
+const customerRow = () => ({
+  id: uid(),
+  name: 'RBAC Walk-in',
+  phone_e164: `+233558${String(Math.floor(Math.random() * 1e6)).padStart(6, '0')}`,
+});
+
+const branchRow = (f: RbacFixture) => ({
+  id: uid(),
+  business_id: f.rows.businesses!.a[0]!,
+  name: `RBAC Probe Branch ${hex()}`,
+  branch_code: `RW${hex(6)}`.toUpperCase(),
+  address: 'Test',
+  latitude: 5.6,
+  longitude: -0.18,
+});
+
+const serviceRow = (f: RbacFixture) => ({
+  id: uid(),
+  business_id: f.rows.businesses!.a[0]!,
+  name: `RBAC Probe Service ${hex()}`,
+  default_duration_minutes: 30,
+});
+
+const sessionRow = (f: RbacFixture, at: At, ticketId: string) => ({
+  id: uid(),
+  ticket_id: ticketId,
+  barber_id: barberOf(f, at),
+  started_at: new Date().toISOString(),
+});
+
+const ticketRow = (f: RbacFixture, at: At, over: Record<string, unknown> = {}) => ({
+  id: uid(),
+  ticket_number: `PB-RBACW-${hex(10)}`,
+  branch_id: branchOf(f, at),
+  customer_id: customerOf(f, at).customerId,
+  branch_service_id: serviceOf(f, at),
+  assigned_barber_id: barberOf(f, at),
+  state: 'completed',
+  completed_at: new Date().toISOString(),
+  created_by: 'staff',
+  ...over,
+});
+
+/** A capability row made by the admin client. */
+async function probeCapability(f: RbacFixture): Promise<string> {
+  const key = `rbac_probe_${hex()}`;
+  await createRow(f, 'capabilities', { key, description: 'rbac write probe' }, 'probe capability');
+  trackDelete(f, 'capabilities', { key });
+  trackDelete(f, 'role_capabilities', { capability: key });
+  return key;
+}
+
+/** Two different far-future dates. */
+const twoDates = () => {
+  const d1 = farDate();
+  let d2 = farDate();
+  while (d2 === d1) d2 = farDate();
+  return [d1, d2] as const;
+};
+
+export const WRITES: WriteEntry[] = [
+  {
+    table: 'appointments',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const r = apptRow(f, at);
+        trackAppointment(f, r.id);
+        return r;
+      },
+      target: async (f, at) => {
+        const r = apptRow(f, at);
+        await createRow(f, 'appointments', r, 'probe appointment');
+        trackAppointment(f, r.id);
+        return { key: r.id, column: 'created_by_staff_id', value: f.staffIds.manager! };
+      },
+    },
+    insert: NOBODY('only through booking functions'),
+    update: NOBODY('only through booking functions'),
+    delete: NOBODY('only through booking functions'),
+  },
+  {
+    table: 'audit_log',
+    key: 'id',
+    probe: {
+      insert: async (f, at) =>
+        row(f, 'audit_log', {
+          id: uid(),
+          actor_type: 'system',
+          action: 'rbac_write_probe',
+          entity_type: 'branch',
+          entity_id: branchOf(f, at),
+          result: 'success',
+        }),
+      target: async (f, at) => {
+        const r = await probeRow(f, 'audit_log', {
+          id: uid(),
+          actor_type: 'system',
+          action: 'rbac_write_probe',
+          entity_type: 'branch',
+          entity_id: branchOf(f, at),
+          result: 'success',
+        });
+        return { key: r.id as string, column: 'result', value: 'failure' };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'barber_days_off',
+    key: 'barber_id', // composite primary key (barber_id, off_date)
+    probe: {
+      insert: async (f, at) => {
+        const r = { barber_id: barberOf(f, at), off_date: farDate() };
+        trackDelete(f, 'barber_days_off', r);
+        return r;
+      },
+      target: async (f, at) => {
+        const [d1, d2] = twoDates();
+        const barber = barberOf(f, at);
+        await createRow(f, 'barber_days_off', { barber_id: barber, off_date: d1 }, 'probe day off');
+        trackDelete(f, 'barber_days_off', { barber_id: barber, off_date: d1 });
+        trackDelete(f, 'barber_days_off', { barber_id: barber, off_date: d2 });
+        return {
+          key: barber,
+          column: 'off_date',
+          value: d2,
+          match: { barber_id: barber, off_date: d1 },
+        };
+      },
+    },
+    insert: w(MANAGERS, 'manage_barber_schedules'),
+    update: w(MANAGERS, 'manage_barber_schedules'),
+    delete: w(MANAGERS, 'manage_barber_schedules'),
+  },
+  {
+    table: 'barber_schedule',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => row(f, 'barber_schedule', scheduleRow(f, at)),
+      target: async (f, at) => {
+        const r = await probeRow(f, 'barber_schedule', scheduleRow(f, at));
+        return { key: r.id as string, column: 'shift_end', value: '20:00:00' };
+      },
+    },
+    insert: w(MANAGERS, 'manage_barber_schedules'),
+    update: w(MANAGERS, 'manage_barber_schedules'),
+    delete: w(MANAGERS, 'manage_barber_schedules'),
+  },
+  {
+    table: 'barber_service_stats',
+    key: 'barber_id', // composite primary key (barber_id, service_id)
+    probe: {
+      insert: async (f, at) => {
+        const service_id = await probeService(f);
+        const r = {
+          barber_id: barberOf(f, at),
+          service_id,
+          completed_count: 1,
+          avg_duration_seconds: 600,
+        };
+        trackDelete(f, 'barber_service_stats', { barber_id: r.barber_id, service_id });
+        return r;
+      },
+      target: async (f, at) => {
+        const service_id = await probeService(f);
+        const barber_id = barberOf(f, at);
+        await createRow(
+          f,
+          'barber_service_stats',
+          { barber_id, service_id, completed_count: 1, avg_duration_seconds: 600 },
+          'probe stats',
+        );
+        trackDelete(f, 'barber_service_stats', { barber_id, service_id });
+        return {
+          key: barber_id,
+          column: 'completed_count',
+          value: 2,
+          match: { barber_id, service_id },
+        };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'barber_skills',
+    key: 'barber_id', // composite primary key (barber_id, service_id)
+    probe: {
+      insert: async (f, at) => {
+        const service_id = await probeService(f);
+        const r = { barber_id: barberOf(f, at), service_id };
+        trackDelete(f, 'barber_skills', r);
+        return r;
+      },
+      target: async (f, at) => {
+        const s1 = await probeService(f);
+        const s2 = await probeService(f);
+        const barber_id = barberOf(f, at);
+        await createRow(f, 'barber_skills', { barber_id, service_id: s1 }, 'probe skill');
+        trackDelete(f, 'barber_skills', { barber_id, service_id: s1 });
+        trackDelete(f, 'barber_skills', { barber_id, service_id: s2 });
+        return {
+          key: barber_id,
+          column: 'service_id',
+          value: s2,
+          match: { barber_id, service_id: s1 },
+        };
+      },
+    },
+    insert: w(MANAGERS, 'manage_barber_schedules'),
+    update: w(MANAGERS, 'manage_barber_schedules'),
+    delete: w(MANAGERS, 'manage_barber_schedules'),
+  },
+  {
+    table: 'barber_weekly_hours',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => row(f, 'barber_weekly_hours', weeklyRow(f, at)),
+      target: async (f, at) => {
+        const r = await probeRow(f, 'barber_weekly_hours', weeklyRow(f, at));
+        return { key: r.id as string, column: 'shift_end', value: '18:00:00' };
+      },
+    },
+    insert: w(MANAGERS, 'manage_barber_schedules'),
+    update: w(MANAGERS, 'manage_barber_schedules'),
+    delete: w(MANAGERS, 'manage_barber_schedules'),
+  },
+  {
+    table: 'barbers',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const { staffId } = await probeStaff(f, 'barber');
+        const id = uid();
+        trackBarber(f, id);
+        return { id, staff_user_id: staffId, home_branch_id: branchOf(f, at), status: 'available' };
+      },
+      // The barber login's own row is the shared fixture row; the runner restores the status.
+      target: async (f, at) => ({ key: barberOf(f, at), column: 'status', value: 'on_break' }),
+      deleteTarget: async (f, at) => {
+        const { barberId } = await probeBarber(f, branchOf(f, at));
+        return { key: barberId, column: 'status', value: 'on_break' };
+      },
+    },
+    insert: patchW(w(OWNER_ONLY, 'creating a barber is staff management'), MANAGERS_ROLES, {
+      currently: 'branch',
+      gap: 'G-barbers-insert-delete',
+    }),
+    update: w(
+      { ...STAFF_BRANCH, barber: 'own' },
+      'staff manage their branch barbers; a barber their own status',
+    ),
+    delete: patchW(w(OWNER_ONLY, 'removing a barber is staff management'), MANAGERS_ROLES, {
+      currently: 'branch',
+      gap: 'G-barbers-insert-delete',
+    }),
+  },
+  {
+    table: 'branch_closures',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => row(f, 'branch_closures', closureRow(f, at)),
+      target: async (f, at) => {
+        const r = await probeRow(f, 'branch_closures', closureRow(f, at));
+        return { key: r.id as string, column: 'reason', value: 'rbac changed' };
+      },
+    },
+    insert: w(MANAGERS, 'edit_hours'),
+    update: w(MANAGERS, 'edit_hours'),
+    delete: w(MANAGERS, 'edit_hours'),
+  },
+  {
+    table: 'branch_hours',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        await freeHoursSlot(f, branchOf(f, at));
+        return row(f, 'branch_hours', hoursRow(f, at));
+      },
+      target: async (f, at) => {
+        await freeHoursSlot(f, branchOf(f, at));
+        const r = await probeRow(f, 'branch_hours', hoursRow(f, at));
+        return { key: r.id as string, column: 'is_closed', value: true };
+      },
+    },
+    insert: w(MANAGERS, 'edit_hours'),
+    update: w(MANAGERS, 'edit_hours'),
+    delete: w(MANAGERS, 'edit_hours'),
+  },
+  {
+    table: 'branch_service_prices',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const bs = await probeBranchService(f, at);
+        return row(f, 'branch_service_prices', {
+          id: uid(),
+          branch_service_id: bs,
+          price_ghs: 10,
+          effective_from: dateAt(0),
+        });
+      },
+      target: async (f, at) => {
+        const bs = await probeBranchService(f, at);
+        const r = await probeRow(f, 'branch_service_prices', {
+          id: uid(),
+          branch_service_id: bs,
+          price_ghs: 10,
+          effective_from: dateAt(0),
+        });
+        return { key: r.id as string, column: 'price_ghs', value: 99 };
+      },
+    },
+    insert: w(MANAGERS, 'edit_pricing'),
+    update: w(MANAGERS, 'edit_pricing'),
+    delete: w(MANAGERS, 'edit_pricing'),
+  },
+  {
+    table: 'branch_services',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const service_id = await probeService(f);
+        const id = uid();
+        trackBranchService(f, id);
+        return { id, branch_id: branchOf(f, at), service_id };
+      },
+      target: async (f, at) => {
+        const id = await probeBranchService(f, at);
+        return { key: id, column: 'is_active', value: false };
+      },
+    },
+    insert: w(MANAGERS, 'edit_pricing'),
+    update: w(MANAGERS, 'edit_pricing'),
+    delete: w(MANAGERS, 'edit_pricing'),
+  },
+  {
+    table: 'branch_ticket_counters',
+    key: 'branch_id', // composite primary key (branch_id, ticket_date)
+    probe: {
+      insert: async (f, at) => {
+        const r = { branch_id: branchOf(f, at), ticket_date: farDate(), last_seq: 1 };
+        trackDelete(f, 'branch_ticket_counters', {
+          branch_id: r.branch_id,
+          ticket_date: r.ticket_date,
+        });
+        return r;
+      },
+      target: async (f, at) => {
+        const branch_id = branchOf(f, at);
+        const ticket_date = farDate();
+        await createRow(
+          f,
+          'branch_ticket_counters',
+          { branch_id, ticket_date, last_seq: 1 },
+          'probe counter',
+        );
+        trackDelete(f, 'branch_ticket_counters', { branch_id, ticket_date });
+        return { key: branch_id, column: 'last_seq', value: 2, match: { branch_id, ticket_date } };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'branches',
+    key: 'id',
+    probe: {
+      insert: async (f) => {
+        const r = branchRow(f);
+        trackBranch(f, r.id);
+        return r;
+      },
+      // The fixture branch itself; the runner restores the address.
+      target: async (f, at) => ({ key: branchOf(f, at), column: 'address', value: 'RBAC changed' }),
+      deleteTarget: async (f) => {
+        const r = branchRow(f);
+        await createRow(f, 'branches', r, 'probe branch');
+        trackBranch(f, r.id);
+        return { key: r.id, column: 'address', value: 'RBAC changed' };
+      },
+    },
+    insert: w(OWNER_ONLY, 'manage_branches'),
+    update: w(OWNER_ONLY, 'manage_branches'),
+    delete: w(OWNER_ONLY, 'manage_branches'),
+  },
+  {
+    table: 'businesses',
+    key: 'id',
+    probe: {
+      // Only one business may exist (one_business_only), so a throwaway cannot be created: the
+      // insert and delete probes target rules that pass row security and are then stopped by the
+      // unique index / the foreign keys from branches and services (passCodes), and update changes
+      // the real row's name and the runner restores it.
+      insert: async (f) =>
+        row(f, 'businesses', { id: uid(), name: `RBAC Probe Business ${hex()}` }),
+      target: async (f) => ({
+        key: f.rows.businesses!.a[0]!,
+        column: 'name',
+        value: `RBAC Renamed ${hex()}`,
+      }),
+      passCodes: ['23505', '23503'],
+    },
+    insert: w(OWNER_ONLY, 'owner'),
+    update: w(OWNER_ONLY, 'owner'),
+    delete: w(OWNER_ONLY, 'owner'),
+  },
+  {
+    table: 'capabilities',
+    key: 'key',
+    probe: {
+      insert: async (f) => {
+        const key = `rbac_probe_${hex()}`;
+        trackDelete(f, 'capabilities', { key });
+        return { key, description: 'rbac write probe' };
+      },
+      target: async (f) => {
+        const key = await probeCapability(f);
+        return { key, column: 'description', value: 'rbac changed' };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'consents',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => row(f, 'consents', consentRow(f, at)),
+      target: async (f, at) => {
+        const r = await probeRow(f, 'consents', consentRow(f, at));
+        return { key: r.id as string, column: 'granted', value: false };
+      },
+    },
+    insert: w({ customer: 'own' }, 'customers record their own choices'),
+    update: NOBODY('consent changes are recorded by inserting'),
+    delete: NOBODY('consent history is kept'),
+  },
+  {
+    table: 'customers',
+    key: 'id',
+    probe: {
+      insert: async (f) => row(f, 'customers', customerRow()),
+      // The customer login's own row (customer 0 / customer 1 are shared fixture rows; the runner
+      // restores the name afterwards).
+      target: async (f, at) => ({
+        key: customerOf(f, at).customerId,
+        column: 'name',
+        value: 'RBAC Renamed',
+      }),
+      deleteTarget: async (f) => {
+        const r = await probeRow(f, 'customers', customerRow());
+        return { key: r.id as string, column: 'name', value: 'RBAC Renamed' };
+      },
+    },
+    insert: w(
+      { receptionist: 'all', manager: 'all', otherManager: 'all', owner: 'all' },
+      'register_walkins (walk-in registration is not branch-scoped)',
+    ),
+    update: w({ customer: 'own' }, 'a customer edits their own profile'),
+    delete: NOBODY('customers are anonymised, not deleted'),
+  },
+  {
+    table: 'feedback',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const ticket_id = await probeTicket(f, at);
+        return row(f, 'feedback', {
+          id: uid(),
+          ticket_id,
+          customer_id: customerOf(f, at).customerId,
+          branch_id: branchOf(f, at),
+          barber_id: barberOf(f, at),
+          overall_rating: 5,
+        });
+      },
+      target: async (f, at) => {
+        const ticket_id = await probeTicket(f, at);
+        const r = await probeRow(f, 'feedback', {
+          id: uid(),
+          ticket_id,
+          customer_id: customerOf(f, at).customerId,
+          branch_id: branchOf(f, at),
+          barber_id: barberOf(f, at),
+          overall_rating: 5,
+        });
+        return { key: r.id as string, column: 'comment', value: 'rbac changed' };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'notifications',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => row(f, 'notifications', noteRow(f, at)),
+      target: async (f, at) => {
+        const r = await probeRow(f, 'notifications', noteRow(f, at));
+        return { key: r.id as string, column: 'failed_reason', value: 'rbac changed' };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'push_subscriptions',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => row(f, 'push_subscriptions', pushRow(f, at)),
+      target: async (f, at) => {
+        const r = await probeRow(f, 'push_subscriptions', pushRow(f, at));
+        return { key: r.id as string, column: 'user_agent', value: 'rbac-agent' };
+      },
+    },
+    insert: NOBODY('saved through a function'),
+    update: NOBODY('saved through a function'),
+    delete: w({ customer: 'own' }, "customer's own devices"),
+  },
+  {
+    table: 'queue_events',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const ticket_id = await probeTicket(f, at);
+        return row(f, 'queue_events', {
+          id: uid(),
+          ticket_id,
+          event_type: 'rbac_write_probe',
+          actor_type: 'system',
+        });
+      },
+      target: async (f, at) => {
+        const ticket_id = await probeTicket(f, at);
+        const r = await probeRow(f, 'queue_events', {
+          id: uid(),
+          ticket_id,
+          event_type: 'rbac_write_probe',
+          actor_type: 'system',
+        });
+        return { key: r.id as string, column: 'event_type', value: 'rbac_changed' };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'queue_tickets',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const r = ticketRow(f, at);
+        trackTicket(f, r.id);
+        return r;
+      },
+      target: async (f, at) => {
+        const id = await probeTicket(f, at, { state: 'waiting', completed_at: null });
+        return { key: id, column: 'state', value: 'cancelled' };
+      },
+    },
+    insert: w(
+      { customer: 'own', ...STAFF_BRANCH },
+      'edit_tickets; a customer joins the queue for themselves',
+    ),
+    update: w(
+      { customer: 'own', barber: 'own', ...STAFF_BRANCH },
+      'edit_tickets; customer cancels their own; barber their own queue',
+    ),
+    delete: patchW(
+      patchW(NOBODY('tickets are never deleted'), ['receptionist', 'manager', 'otherManager'], {
+        currently: 'branch',
+        gap: 'G-ticket-delete',
+      }),
+      ['owner'],
+      { currently: 'all', gap: 'G-ticket-delete' },
+    ),
+  },
+  {
+    table: 'role_capabilities',
+    key: 'capability',
+    probe: {
+      insert: async (f) => {
+        const capability = await probeCapability(f);
+        return { role: 'receptionist', capability };
+      },
+      target: async (f) => {
+        const capability = await probeCapability(f);
+        await createRow(
+          f,
+          'role_capabilities',
+          { role: 'receptionist', capability },
+          'probe role cap',
+        );
+        return {
+          key: capability,
+          column: 'role',
+          value: 'analyst',
+          match: { role: 'receptionist', capability },
+        };
+      },
+    },
+    insert: NOBODY(SERVER),
+    update: NOBODY(SERVER),
+    delete: NOBODY(SERVER),
+  },
+  {
+    table: 'service_sessions',
+    key: 'id',
+    probe: {
+      insert: async (f, at) => {
+        const ticket = await probeTicket(f, at);
+        return row(f, 'service_sessions', sessionRow(f, at, ticket));
+      },
+      target: async (f, at) => {
+        const ticket = await probeTicket(f, at);
+        const r = await probeRow(f, 'service_sessions', sessionRow(f, at, ticket));
+        // started_at, not ended_at: ending a session rolls into barber_service_stats.
+        return { key: r.id as string, column: 'started_at', value: '2026-01-01T00:00:00Z' };
+      },
+    },
+    insert: w({ barber: 'own', ...STAFF_BRANCH }, 'edit_tickets; a barber their own sessions'),
+    update: w({ barber: 'own', ...STAFF_BRANCH }, 'edit_tickets; a barber their own sessions'),
+    delete: patchW(
+      patchW(
+        patchW(NOBODY('sessions are never deleted'), ['barber'], {
+          currently: 'own',
+          gap: 'G-session-delete',
+        }),
+        ['receptionist', 'manager', 'otherManager'],
+        { currently: 'branch', gap: 'G-session-delete' },
+      ),
+      ['owner'],
+      { currently: 'all', gap: 'G-session-delete' },
+    ),
+  },
+  {
+    table: 'services',
+    key: 'id',
+    probe: {
+      insert: async (f) => row(f, 'services', serviceRow(f)),
+      target: async (f) => {
+        const r = await probeRow(f, 'services', serviceRow(f));
+        return { key: r.id as string, column: 'name', value: `RBAC Renamed ${hex()}` };
+      },
+    },
+    insert: patchW(w(OWNER_ONLY, 'business-wide catalogue'), MANAGERS_ROLES, {
+      currently: 'all',
+      gap: 'J-services-catalog-write',
+      why: 'pending user decision',
+    }),
+    update: patchW(w(OWNER_ONLY, 'business-wide catalogue'), MANAGERS_ROLES, {
+      currently: 'all',
+      gap: 'J-services-catalog-write',
+      why: 'pending user decision',
+    }),
+    delete: patchW(w(OWNER_ONLY, 'business-wide catalogue'), MANAGERS_ROLES, {
+      currently: 'all',
+      gap: 'J-services-catalog-write',
+      why: 'pending user decision',
+    }),
+  },
+  {
+    table: 'staff_branch_assignments',
+    key: 'staff_user_id', // composite primary key (staff_user_id, branch_id)
+    probe: {
+      insert: async (f, at) => {
+        const { staffId } = await probeStaff(f, 'receptionist');
+        const r = { staff_user_id: staffId, branch_id: branchOf(f, at) };
+        trackDelete(f, 'staff_branch_assignments', r);
+        return r;
+      },
+      target: async (f, at) => {
+        const { staffId } = await probeStaff(f, 'receptionist', branchOf(f, at));
+        return {
+          key: staffId,
+          column: 'branch_id',
+          value: otherBranch(f, at),
+          match: { staff_user_id: staffId, branch_id: branchOf(f, at) },
+        };
+      },
+    },
+    insert: NOBODY('staff management runs server-side'),
+    update: NOBODY('staff management runs server-side'),
+    delete: NOBODY('staff management runs server-side'),
+  },
+  {
+    table: 'staff_users',
+    key: 'id',
+    probe: {
+      insert: async (f) => {
+        const email = `rbac-probe-${hex(12)}@test.pixelbarber.local`;
+        const auth = await f.admin.auth.admin.createUser({
+          email,
+          password: PASSWORD,
+          email_confirm: true,
+        });
+        if (auth.error) throw new Error(`probe auth user: ${auth.error.message}`);
+        const authId = auth.data.user!.id;
+        track(f, async () => {
+          const r = await f.admin.auth.admin.deleteUser(authId);
+          if (r.error) throw new Error(`undo auth user: ${r.error.message}`);
+        });
+        return row(f, 'staff_users', {
+          id: uid(),
+          auth_user_id: authId,
+          name: 'RBAC Probe',
+          email,
+          role: 'receptionist',
+          invite_status: 'accepted',
+        });
+      },
+      target: async (f, at) => {
+        const { staffId } = await probeStaff(f, 'receptionist', branchOf(f, at));
+        return { key: staffId, column: 'name', value: 'RBAC Renamed' };
+      },
+    },
+    insert: NOBODY('staff management runs server-side'),
+    update: NOBODY('staff management runs server-side'),
+    delete: NOBODY('staff management runs server-side'),
   },
 ];
