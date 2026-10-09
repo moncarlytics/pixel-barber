@@ -312,6 +312,14 @@ export const FUNCTIONS: FunctionEntry[] = [
     async ({ f }) => ({ target_branch: branchA(f) }),
     outcomes({ allow: ALL, why: "session helper: answers for the caller's own branches" }),
   ),
+  entry(
+    'customer_in_my_branches',
+    async ({ f }) => ({ p_customer_id: customerOf(f, 'a').customerId }),
+    outcomes({
+      allow: AUTHENTICATED,
+      why: "session helper for consent reads: answers for the caller's own branches (anon is revoked)",
+    }),
+  ),
 
   // ---- internal ----
   entry('bump_ticket_version', null, internal(TRIGGER)),
