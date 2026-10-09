@@ -944,7 +944,7 @@ export function trackBarber(f: RbacFixture, barberId: string) {
 }
 
 /** Removes a ticket and everything that can point at it. */
-async function deleteTicketDeep(f: RbacFixture, id: string): Promise<void> {
+export async function deleteTicketDeep(f: RbacFixture, id: string): Promise<void> {
   const db = loose(f);
   const steps: [string, string][] = [
     ['queue_events', 'ticket_id'],
