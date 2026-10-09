@@ -164,13 +164,9 @@ export const TABLES: TableEntry[] = [
   {
     table: 'consents',
     key: 'id',
-    read: patch(
-      byRole(
-        ['none', 'own', 'none', 'none', 'branch', 'none', 'all', 'branch'],
-        'broadcast_messages for own-branch customers; analysts read promotions via customer_detail',
-      ),
-      ['manager', 'analyst', 'otherManager'],
-      { currently: 'all', gap: 'G-consents-scope' },
+    read: byRole(
+      ['none', 'own', 'none', 'none', 'branch', 'none', 'all', 'branch'],
+      'broadcast_messages for own-branch customers; analysts read promotions via customer_detail',
     ),
   },
   {
@@ -723,18 +719,12 @@ export const WRITES: WriteEntry[] = [
         return { key: barberId, column: 'status', value: 'on_break' };
       },
     },
-    insert: patchW(w(OWNER_ONLY, 'creating a barber is staff management'), MANAGERS_ROLES, {
-      currently: 'branch',
-      gap: 'G-barbers-insert-delete',
-    }),
+    insert: w(OWNER_ONLY, 'creating a barber is staff management'),
     update: w(
       { ...STAFF_BRANCH, barber: 'own' },
       'staff manage their branch barbers; a barber their own status',
     ),
-    delete: patchW(w(OWNER_ONLY, 'removing a barber is staff management'), MANAGERS_ROLES, {
-      currently: 'branch',
-      gap: 'G-barbers-insert-delete',
-    }),
+    delete: w(OWNER_ONLY, 'removing a barber is staff management'),
   },
   {
     table: 'branch_closures',
@@ -1029,14 +1019,7 @@ export const WRITES: WriteEntry[] = [
       { customer: 'own', barber: 'own', ...STAFF_BRANCH },
       'edit_tickets; customer cancels their own; barber their own queue',
     ),
-    delete: patchW(
-      patchW(NOBODY('tickets are never deleted'), ['receptionist', 'manager', 'otherManager'], {
-        currently: 'branch',
-        gap: 'G-ticket-delete',
-      }),
-      ['owner'],
-      { currently: 'all', gap: 'G-ticket-delete' },
-    ),
+    delete: NOBODY('tickets are never deleted'),
   },
   {
     // A customer inserting a ticket that is already completed, staff-created and assigned: not a real
@@ -1059,8 +1042,6 @@ export const WRITES: WriteEntry[] = [
     insert: patchW(TICKET_INSERT, ['customer'], {
       expect: 'deny',
       why: 'a customer can only join the queue (waiting, created by the customer), not write a finished ticket',
-      currently: 'own',
-      gap: 'G-ticket-customer-forge',
     }),
     update: NOBODY('covered by queue_tickets'),
     delete: NOBODY('covered by queue_tickets'),
@@ -1110,18 +1091,7 @@ export const WRITES: WriteEntry[] = [
     },
     insert: w({ barber: 'own', ...STAFF_BRANCH }, 'edit_tickets; a barber their own sessions'),
     update: w({ barber: 'own', ...STAFF_BRANCH }, 'edit_tickets; a barber their own sessions'),
-    delete: patchW(
-      patchW(
-        patchW(NOBODY('sessions are never deleted'), ['barber'], {
-          currently: 'own',
-          gap: 'G-session-delete',
-        }),
-        ['receptionist', 'manager', 'otherManager'],
-        { currently: 'branch', gap: 'G-session-delete' },
-      ),
-      ['owner'],
-      { currently: 'all', gap: 'G-session-delete' },
-    ),
+    delete: NOBODY('sessions are never deleted'),
   },
   {
     table: 'services',

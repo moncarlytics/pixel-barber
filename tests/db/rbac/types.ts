@@ -50,12 +50,7 @@ export const effective = <T>(e: Expect<T>): T => e.currently ?? e.expect;
 /** Every gap id that appears in the matrix (sorted); coverage.test.ts fails when they differ, so a
  * gap can't be opened or closed without this list (and the report) changing. */
 export const OPEN_GAPS: string[] = [
-  'G-barbers-insert-delete',
-  'G-consents-scope',
   'G-queue-events-analyst',
-  'G-session-delete',
-  'G-ticket-customer-forge',
-  'G-ticket-delete',
   'J-anon-barbers-read',
   'J-link-customer-anon',
   'J-link-customer-staff',
