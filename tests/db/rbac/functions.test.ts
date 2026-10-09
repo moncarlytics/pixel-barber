@@ -5,7 +5,7 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { FUNCTIONS, drainScratch, type FunctionEntry } from './functions';
+import { FUNCTIONS, REFUSAL, drainScratch, type FunctionEntry } from './functions';
 import { ROLES, effective, type Outcome } from './types';
 import { cleanupRbacFixture, createRbacFixture, type Loose, type RbacFixture } from './fixture';
 
@@ -50,12 +50,17 @@ async function observe(entry: FunctionEntry, role: (typeof ROLES)[number]) {
     if (!REFUSAL_CODES.includes(error.code ?? '')) {
       throw new Error(`${what}: unexpected error (${error.code || 'no code'}) ${error.message}`);
     }
+    if (error.code === 'P0001' && !(entry.refusal ?? REFUSAL).test(error.message)) {
+      throw new Error(`${what}: refused for an unexpected reason: ${error.message}`);
+    }
     return { actual: 'deny' as Outcome, note: ` (${error.message})` };
   }
   if (entry.void) {
     const took = entry.applied ? await entry.applied(f, args) : true;
     return { actual: (took ? 'allow' : 'empty') as Outcome, note: '' };
   }
+  const problem = entry.verify?.(f, role, data);
+  if (problem) throw new Error(`${what}: ${problem}`);
   return { actual: (isEmpty(data) ? 'empty' : 'allow') as Outcome, note: '' };
 }
 
@@ -64,14 +69,16 @@ describe.each(FUNCTIONS.map((entry) => [entry.name, entry] as const))('%s', (_na
     await drainScratch(entry.name);
   }, 180000);
 
-  it.each(ROLES)(
-    '%s',
-    async (role) => {
-      const wanted = effective(entry.outcome[role]);
-      if (wanted === 'internal') return;
-      const { actual, note } = await observe(entry, role);
-      expect(actual, `${entry.name} as ${role}${note}`).toBe(wanted);
-    },
-    120000,
-  );
+  for (const role of ROLES) {
+    const wanted = effective(entry.outcome[role]);
+    // Internal functions are not exercised: reported as skipped, never as passed.
+    (wanted === 'internal' ? it.skip : it)(
+      role,
+      async () => {
+        const { actual, note } = await observe(entry, role);
+        expect(actual, `${entry.name} as ${role}${note}`).toBe(wanted);
+      },
+      120000,
+    );
+  }
 });

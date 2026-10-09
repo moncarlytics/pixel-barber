@@ -24,6 +24,10 @@ export interface FunctionEntry {
   /** Arguments for this role's call; may create fresh rows with f.admin for mutating functions. */
   args: (f: RbacFixture, role: Role) => Promise<Record<string, unknown>>;
   outcome: PerRole<Outcome>;
+  /** Messages a genuine refusal may carry (a P0001 raised by the function); default REFUSAL. */
+  refusal?: RegExp;
+  /** Extra check on a successful result for this role; returns a problem description, or null. */
+  verify?: (f: RbacFixture, role: Role, data: unknown) => string | null;
   /** The function returns void: a call that raises nothing is a success, not an empty result. */
   void?: boolean;
   /** For void functions that silently do nothing for the wrong caller: whether the call took effect. */
@@ -62,6 +66,9 @@ interface Ctx {
 
 type Build = (c: Ctx) => Promise<Record<string, unknown>>;
 
+export const REFUSAL =
+  /not_allowed|not allowed|authentication required|not_a_customer|not a customer|permission denied|not_found|verified phone/i;
+
 const MIN = 60_000;
 const branchA = (f: RbacFixture) => f.base.branchId;
 const unwrap = <T>(r: { data: T | null; error: { message: string } | null }, what: string): T => {
@@ -81,11 +88,13 @@ function wednesday(): string {
 }
 const slot = (hhmm: string) => `${wednesday()}T${hhmm}:00.000Z`;
 
-/** `minutes` from now, but never past 23:50 UTC, so the appointment stays "today". */
+/** `minutes` from now; throws when that would cross 23:50 UTC, so a probe never leaves "today". */
 function laterToday(minutes: number): Date {
-  const now = Date.now();
-  const limit = new Date(`${dateAt(0)}T23:50:00.000Z`).getTime();
-  return new Date(Math.min(now + minutes * MIN, Math.max(limit, now + MIN)));
+  const target = Date.now() + minutes * MIN;
+  if (target > new Date(`${dateAt(0)}T23:50:00.000Z`).getTime()) {
+    throw new Error('probe invalid: not enough of today (UTC) is left; re-run after midnight UTC');
+  }
+  return new Date(target);
 }
 
 async function removeAppointments(f: RbacFixture, ids: string[]): Promise<void> {
@@ -236,7 +245,7 @@ function entry(
   name: string,
   build: Build | null,
   outcome: PerRole<Outcome>,
-  extra: Pick<FunctionEntry, 'void' | 'applied'> = {},
+  extra: Pick<FunctionEntry, 'void' | 'applied' | 'verify' | 'refusal'> = {},
 ): FunctionEntry {
   return {
     name,
@@ -350,6 +359,17 @@ export const FUNCTIONS: FunctionEntry[] = [
       allow: ['customer'],
       why: 'customer onboarding link',
       patch: {
+        ...Object.fromEntries(
+          (['barber', 'receptionist', 'manager', 'analyst', 'owner', 'otherManager'] as Role[]).map(
+            (r) => [
+              r,
+              {
+                gap: 'J-link-customer-staff',
+                why: 'pending user decision — refused today only because staff accounts have no verified phone; the function has no role check',
+              },
+            ],
+          ),
+        ),
         anon: {
           gap: 'J-link-customer-anon',
           why: 'pending user decision: anon holds EXECUTE; the call is refused inside the function (authentication required), so nothing is exposed',
@@ -686,6 +706,15 @@ export const FUNCTIONS: FunctionEntry[] = [
       why: "manage_barber_schedules: the barbers at the caller's own branches",
       emptyWhy: 'lists barbers only for manage_barber_schedules, so other roles get none',
     }),
+    {
+      verify: (f, role, data) => {
+        if (role !== 'otherManager') return null;
+        const rows = (Array.isArray(data) ? data : []) as { barber_id: string }[];
+        const own = [f.base.barberA.barberId, f.base.barberB.barberId];
+        const leaked = rows.filter((r) => own.includes(r.barber_id));
+        return leaked.length > 0 ? 'lists branch A barbers to a branch B manager' : null;
+      },
+    },
   ),
   entry(
     'reset_barber_schedule_day',

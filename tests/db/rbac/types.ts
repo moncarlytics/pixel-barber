@@ -58,6 +58,7 @@ export const OPEN_GAPS: string[] = [
   'G-ticket-delete',
   'J-anon-barbers-read',
   'J-link-customer-anon',
+  'J-link-customer-staff',
   'J-services-catalog-write',
   'J-staff-assignments-read',
   'J-staff-users-barbers',
