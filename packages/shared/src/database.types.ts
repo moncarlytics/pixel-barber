@@ -1105,6 +1105,7 @@ export type Database = {
           service_started_at: string | null;
           state: Database['public']['Enums']['ticket_state'];
           stepped_out_at: string | null;
+          ticket_date: string;
           ticket_number: string;
           updated_at: string;
           version: number;
@@ -1137,6 +1138,7 @@ export type Database = {
           service_started_at?: string | null;
           state?: Database['public']['Enums']['ticket_state'];
           stepped_out_at?: string | null;
+          ticket_date?: string;
           ticket_number: string;
           updated_at?: string;
           version?: number;
@@ -1169,6 +1171,7 @@ export type Database = {
           service_started_at?: string | null;
           state?: Database['public']['Enums']['ticket_state'];
           stepped_out_at?: string | null;
+          ticket_date?: string;
           ticket_number?: string;
           updated_at?: string;
           version?: number;
