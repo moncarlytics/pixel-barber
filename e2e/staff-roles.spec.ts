@@ -38,12 +38,23 @@ async function logIn(page: Page, role: string) {
 
 const link = (main: Locator, name: string) => main.getByRole('link', { name, exact: true });
 
-// The home page fetches each capability after it renders, so wait for the requests to settle
-// before asserting that a link is absent.
+// The home page asks has_capability once per gated link after it renders, so wait for those three
+// responses before asserting that a link is absent.
 async function openHome(page: Page): Promise<Locator> {
+  const caps = ['view_branch_reports', 'view_branch_dashboard', 'view_customers'].map((cap) =>
+    page.waitForResponse(
+      (r) =>
+        r.url().includes('/rpc/has_capability') &&
+        r.request().method() === 'POST' &&
+        (r.request().postData() ?? '').includes(cap),
+      { timeout: 15000 },
+    ),
+  );
   await page.goto(`${STAFF}/`);
+  await Promise.all(caps);
   const main = page.locator('main');
   await expect(link(main, 'Appointments')).toBeVisible({ timeout: 15000 });
+  // Let React apply the responses before counting links.
   await page.waitForLoadState('networkidle');
   return main;
 }
@@ -57,61 +68,81 @@ test.describe.serial('staff roles: home links and no-access pages', () => {
   test.skip(!url || !serviceRoleKey, 'Supabase env vars not set');
 
   test.beforeAll(async () => {
-    const { data: business } = await admin.from('businesses').select('id').limit(1).single();
-    const { data: service } = await admin
-      .from('services')
-      .insert({
-        business_id: business!.id,
-        name: `SRL E2E Cut ${suffix}`,
-        default_duration_minutes: 30,
-      })
-      .select('id')
-      .single();
-    seed.serviceId = service!.id;
-    const { data: branch } = await admin
-      .from('branches')
-      .insert({
-        business_id: business!.id,
-        name: `SRL E2E Branch ${suffix}`,
-        branch_code: `SL${suffix.slice(-6)}`,
-        address: 'Test',
-        latitude: 5.6,
-        longitude: -0.18,
-      })
-      .select('id')
-      .single();
-    seed.branchId = branch!.id;
+    const must = <T>(res: { data: T | null; error: { message: string } | null }, label: string) => {
+      if (res.error || !res.data) throw new Error(`${label}: ${res.error?.message ?? 'no row'}`);
+      return res.data;
+    };
+    const business = must(
+      await admin.from('businesses').select('id').limit(1).single(),
+      'businesses',
+    );
+    const service = must(
+      await admin
+        .from('services')
+        .insert({
+          business_id: business.id,
+          name: `SRL E2E Cut ${suffix}`,
+          default_duration_minutes: 30,
+        })
+        .select('id')
+        .single(),
+      'services',
+    );
+    seed.serviceId = service.id;
+    const branch = must(
+      await admin
+        .from('branches')
+        .insert({
+          business_id: business.id,
+          name: `SRL E2E Branch ${suffix}`,
+          branch_code: `SL${suffix.slice(-6)}`,
+          address: 'Test',
+          latitude: 5.6,
+          longitude: -0.18,
+        })
+        .select('id')
+        .single(),
+      'branches',
+    );
+    seed.branchId = branch.id;
     const staff = async (role: Role, name: string) => {
-      const { data: auth } = await admin.auth.admin.createUser({
+      const created = await admin.auth.admin.createUser({
         email: email(role),
         password: PASSWORD,
         email_confirm: true,
       });
-      seed.authIds.push(auth.user!.id);
-      const { data: row } = await admin
-        .from('staff_users')
-        .insert({
-          auth_user_id: auth.user!.id,
-          name,
-          email: email(role),
-          role,
-          invite_status: 'accepted',
-        })
-        .select('id')
-        .single();
-      seed.staffIds.push(row!.id);
-      return row!.id as string;
+      if (created.error) throw new Error(`createUser ${role}: ${created.error.message}`);
+      const auth = created.data;
+      seed.authIds.push(auth.user.id);
+      const row = must(
+        await admin
+          .from('staff_users')
+          .insert({
+            auth_user_id: auth.user.id,
+            name,
+            email: email(role),
+            role,
+            invite_status: 'accepted',
+          })
+          .select('id')
+          .single(),
+        'staff_users',
+      );
+      seed.staffIds.push(row.id);
+      return row.id;
     };
     for (const role of ['receptionist', 'branch_manager', 'analyst'] as const) {
       const id = await staff(role, `SRL E2E ${role}`);
-      await admin
+      const { error } = await admin
         .from('staff_branch_assignments')
         .insert({ staff_user_id: id, branch_id: seed.branchId! });
+      if (error) throw new Error(`staff_branch_assignments: ${error.message}`);
     }
     const barberId = await staff('barber', 'SRL E2E barber');
-    await admin
+    const { error: barberError } = await admin
       .from('barbers')
       .insert({ staff_user_id: barberId, home_branch_id: seed.branchId!, status: 'available' });
+    if (barberError) throw new Error(`barbers: ${barberError.message}`);
   });
 
   test.afterAll(async () => {
@@ -127,7 +158,10 @@ test.describe.serial('staff roles: home links and no-access pages', () => {
       );
       check('staff_users', await admin.from('staff_users').delete().eq('id', id));
     }
-    for (const id of seed.authIds) await admin.auth.admin.deleteUser(id);
+    for (const id of seed.authIds) {
+      const { error } = await admin.auth.admin.deleteUser(id);
+      if (error) failures.push(`auth user ${id}: ${error.message}`);
+    }
     if (seed.branchId)
       check('branches', await admin.from('branches').delete().eq('id', seed.branchId));
     if (seed.serviceId)
