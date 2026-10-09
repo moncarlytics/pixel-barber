@@ -17,6 +17,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
+    "test:rbac": "vitest run --config vitest.rbac.config.ts --no-file-parallelism",
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "bootstrap:owner": "node scripts/bootstrap-owner.mjs"

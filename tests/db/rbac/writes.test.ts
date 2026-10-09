@@ -5,7 +5,7 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { WRITES, type WriteEntry } from './tables';
+import { WRITES, type WriteEntry, type WriteTarget } from './tables';
 import { ROLES, effective, type Role, type WriteScope } from './types';
 import {
   buildScoped,
@@ -44,10 +44,14 @@ and the fixture cleanup failed: ${msg(e)}`)
 
 const OPS = ['insert', 'update', 'delete'] as const;
 type Op = (typeof OPS)[number];
-const SIDES: At[] = ['a', 'b'];
+/** 'a-other' is a branch-A row owned by someone else; it is tried only for cells whose scope is
+ * `own`, and must always be refused. */
+type Side = At | 'a-other';
+const SIDES: Side[] = ['a', 'b', 'a-other'];
 
-/** Whether the matrix says `role` may write at branch `at` under this scope. */
-function shouldAllow(scope: WriteScope, role: Role, at: At): boolean {
+/** Whether the matrix says `role` may write at this side under this scope. */
+function shouldAllow(scope: WriteScope, role: Role, at: Side): boolean {
+  if (at === 'a-other') return scope === 'all' || scope === 'branch';
   switch (scope) {
     case 'deny':
       return false;
@@ -92,7 +96,7 @@ async function disposeAll(): Promise<void> {
 async function cached<T>(
   entry: WriteEntry,
   kind: Op,
-  at: At,
+  at: Side,
   build: () => Promise<T>,
 ): Promise<{ key: string; value: T }> {
   if (entry.probe.exclusive) {
@@ -137,9 +141,31 @@ async function count(db: Loose, table: string, match: Record<string, unknown>): 
 
 const client = (role: Role) => f.clients[role] as unknown as Loose;
 
-async function tryInsert(entry: WriteEntry, role: Role, at: At): Promise<boolean> {
+/** The probe builders for one side; 'a-other' needs the entry's `other` builders. */
+function builder<K extends 'insert' | 'target' | 'deleteTarget'>(
+  entry: WriteEntry,
+  name: K,
+  at: Side,
+): () => Promise<K extends 'insert' ? Record<string, unknown> : WriteTarget> {
+  type R = K extends 'insert' ? Record<string, unknown> : WriteTarget;
+  if (at === 'a-other') {
+    const o = entry.probe.other;
+    const fn = (o?.[name] ?? (name === 'deleteTarget' ? o?.target : undefined)) as
+      ((f: RbacFixture) => Promise<R>) | undefined;
+    if (!fn) throw new Error(`${nameOf(entry)}: an own-scope ${name} needs probe.other.${name}`);
+    return () => fn(f);
+  }
+  const p = entry.probe;
+  const fn = (name === 'deleteTarget' ? (p.deleteTarget ?? p.target) : p[name]) as (
+    f: RbacFixture,
+    at: At,
+  ) => Promise<R>;
+  return () => fn(f, at);
+}
+
+async function tryInsert(entry: WriteEntry, role: Role, at: Side): Promise<boolean> {
   const what = `${nameOf(entry)} insert as ${role} at ${at}`;
-  const { key, value: row } = await cached(entry, 'insert', at, () => entry.probe.insert(f, at));
+  const { key, value: row } = await cached(entry, 'insert', at, builder(entry, 'insert', at));
   const r = await client(role).from(entry.table).insert(row);
   if (classify(r.error, what, entry.probe.passCodes, entry.probe.refuseErrors) === 'refused')
     return false;
@@ -148,10 +174,10 @@ async function tryInsert(entry: WriteEntry, role: Role, at: At): Promise<boolean
   return true;
 }
 
-async function tryUpdate(entry: WriteEntry, role: Role, at: At): Promise<boolean> {
+async function tryUpdate(entry: WriteEntry, role: Role, at: Side): Promise<boolean> {
   const what = `${nameOf(entry)} update as ${role} at ${at}`;
   const db = loose(f);
-  const { key, value: t } = await cached(entry, 'update', at, () => entry.probe.target(f, at));
+  const { key, value: t } = await cached(entry, 'update', at, builder(entry, 'target', at));
   const match = t.match ?? { [entry.key]: t.key };
   const before = await db.from(entry.table).select(t.column).match(match);
   if (before.error || !before.data || before.data.length !== 1) {
@@ -183,12 +209,10 @@ async function tryUpdate(entry: WriteEntry, role: Role, at: At): Promise<boolean
   return allowed;
 }
 
-async function tryDelete(entry: WriteEntry, role: Role, at: At): Promise<boolean> {
+async function tryDelete(entry: WriteEntry, role: Role, at: Side): Promise<boolean> {
   const what = `${nameOf(entry)} delete as ${role} at ${at}`;
   const db = loose(f);
-  const { key, value: t } = await cached(entry, 'delete', at, () =>
-    (entry.probe.deleteTarget ?? entry.probe.target)(f, at),
-  );
+  const { key, value: t } = await cached(entry, 'delete', at, builder(entry, 'deleteTarget', at));
   const match = t.match ?? { [entry.key]: t.key };
   if ((await count(db, entry.table, match)) !== 1) throw new Error(`${what}: probe row not found`);
   const r = await client(role).from(entry.table).delete().match(match);
@@ -202,11 +226,11 @@ async function tryDelete(entry: WriteEntry, role: Role, at: At): Promise<boolean
 
 const attempt = { insert: tryInsert, update: tryUpdate, delete: tryDelete } satisfies Record<
   Op,
-  (entry: WriteEntry, role: Role, at: At) => Promise<boolean>
+  (entry: WriteEntry, role: Role, at: Side) => Promise<boolean>
 >;
 
 /** Runs one attempt, then the undo stack; a failure in either is reported, never swallowed. */
-async function guarded(entry: WriteEntry, op: Op, role: Role, at: At): Promise<boolean> {
+async function guarded(entry: WriteEntry, op: Op, role: Role, at: Side): Promise<boolean> {
   let allowed = false;
   let failure: unknown;
   try {
@@ -239,8 +263,10 @@ describe.each(WRITES.map((entry) => [nameOf(entry), entry] as const))('%s', (_na
     async (role) => {
       for (const op of OPS) {
         if (entry.insertOnly && op !== 'insert') continue;
+        if (entry.updateOnly && op !== 'update') continue;
         const scope = effective(entry[op][role]);
         for (const at of SIDES) {
+          if (at === 'a-other' && scope !== 'own') continue;
           const allowed = await guarded(entry, op, role, at);
           expect
             .soft(allowed, `${nameOf(entry)} ${op} as ${role} at ${at}`)

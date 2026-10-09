@@ -10,7 +10,8 @@ export default defineConfig({
       'packages/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}',
     ],
-    exclude: ['**/node_modules/**', '**/.next/**', 'e2e/**'],
+    // tests/db/rbac hits staging and is slow: run it with `npm run test:rbac`.
+    exclude: ['**/node_modules/**', '**/.next/**', 'e2e/**', 'tests/db/rbac/**'],
     // No test files exist yet in Phase 0 — the CI suite must still pass empty.
     passWithNoTests: true,
   },

@@ -1,6 +1,13 @@
 // tests/db/rbac/coverage.test.ts
 // @vitest-environment node
 // Every public table and view is in the matrix, and the matrix names nothing that no longer exists.
+//
+// The role/permission suite (tests/db/rbac) runs against staging and is slow, so the default
+// `npm test` skips it. Run it with `npm run test:rbac` (one file at a time).
+// To cover a new table: add a TABLES entry (read scopes per role) in tables.ts and a WRITES entry
+// (probe builders for insert/target, plus `probe.other` if any cell is `own`, and the insert/update/
+// delete scopes per role). To cover a new callable function: add a FUNCTIONS entry in functions.ts.
+// This file fails until every public table, view and callable function is classified.
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 import { createClient } from '@supabase/supabase-js';
@@ -31,7 +38,7 @@ describe('coverage', () => {
       classified.filter((t) => !exposed.includes(t)),
       'matrix entries that no longer exist',
     ).toEqual([]);
-  });
+  }, 60000);
 
   it('has a write entry for every base table (and only those)', () => {
     const views = ['branch_status_view', 'current_branch_service_price', 'customer_segments'];
@@ -54,7 +61,7 @@ describe('coverage', () => {
       classified.filter((n) => !callable.includes(n)),
       'matrix entries that no longer exist',
     ).toEqual([]);
-  });
+  }, 60000);
 
   it('pins the open gaps', () => {
     const gaps = new Set<string>();

@@ -328,6 +328,14 @@ export interface WriteProbe {
   /** Probe rows of different operations conflict, so a cached row of another operation is torn down
    * before this one is used. */
   exclusive?: boolean;
+  /** Required whenever a cell's effective scope is `own`: the same operation on a branch-A row that
+   * somebody ELSE owns (another customer, another barber), which must be refused. Without it a
+   * policy widened to "anything at my branch" would still pass every `own` cell. */
+  other?: {
+    insert?: (f: RbacFixture) => Promise<Record<string, unknown>>;
+    target?: (f: RbacFixture) => Promise<WriteTarget>;
+    deleteTarget?: (f: RbacFixture) => Promise<WriteTarget>;
+  };
 }
 
 export interface WriteEntry {
@@ -336,6 +344,8 @@ export interface WriteEntry {
   label?: string;
   /** Only the insert operation is exercised (update and delete are covered by the main entry). */
   insertOnly?: boolean;
+  /** Only the update operation is exercised (insert and delete are covered by the main entry). */
+  updateOnly?: boolean;
   key: string;
   probe: WriteProbe;
   insert: PerRole<WriteScope>;
@@ -520,10 +530,20 @@ const WAITING = {
   completed_at: null,
 };
 
-const TICKET_INSERT = w(
-  { customer: 'own', ...STAFF_BRANCH },
-  'edit_tickets; a customer joins the queue for themselves',
-);
+const TICKET_INSERT = patchW(w(STAFF_BRANCH, 'edit_tickets'), ['customer'], {
+  expect: 'deny',
+  why: 'customers join via tickets-join (service role); no direct insert',
+});
+
+/** A branch-A ticket that belongs to another customer and another barber (an `own` write must fail). */
+const otherTicket = async (f: RbacFixture, over: Record<string, unknown> = {}) => {
+  const { barberId } = await probeBarber(f, branchOf(f, 'a'));
+  return probeTicket(f, 'a', {
+    customer_id: customerOf(f, 'b').customerId,
+    assigned_barber_id: barberId,
+    ...over,
+  });
+};
 
 /** A capability row made by the admin client. */
 async function probeCapability(f: RbacFixture): Promise<string> {
@@ -718,6 +738,12 @@ export const WRITES: WriteEntry[] = [
         const { barberId } = await probeBarber(f, branchOf(f, at));
         return { key: barberId, column: 'status', value: 'on_break' };
       },
+      other: {
+        target: async (f) => {
+          const { barberId } = await probeBarber(f, branchOf(f, 'a'));
+          return { key: barberId, column: 'status', value: 'on_break' };
+        },
+      },
     },
     insert: w(OWNER_ONLY, 'creating a barber is staff management'),
     update: w(
@@ -896,6 +922,13 @@ export const WRITES: WriteEntry[] = [
         const r = await probeRow(f, 'consents', consentRow(f, at));
         return { key: r.id as string, column: 'granted', value: false };
       },
+      other: {
+        insert: async (f) => row(f, 'consents', consentRow(f, 'b')),
+        target: async (f) => {
+          const r = await probeRow(f, 'consents', consentRow(f, 'b'));
+          return { key: r.id as string, column: 'granted', value: false };
+        },
+      },
     },
     insert: w({ customer: 'own' }, 'customers record their own choices'),
     update: NOBODY('consent changes are recorded by inserting'),
@@ -916,6 +949,14 @@ export const WRITES: WriteEntry[] = [
       deleteTarget: async (f) => {
         const r = await probeRow(f, 'customers', customerRow());
         return { key: r.id as string, column: 'name', value: 'RBAC Renamed' };
+      },
+      other: {
+        // Customer 1 is another customer's shared fixture row; the runner restores the name.
+        target: async (f) => ({
+          key: customerOf(f, 'b').customerId,
+          column: 'name',
+          value: 'RBAC Renamed',
+        }),
       },
     },
     insert: w(
@@ -969,6 +1010,12 @@ export const WRITES: WriteEntry[] = [
         const r = await probeRow(f, 'push_subscriptions', pushRow(f, at));
         return { key: r.id as string, column: 'user_agent', value: 'rbac-agent' };
       },
+      other: {
+        target: async (f) => {
+          const r = await probeRow(f, 'push_subscriptions', pushRow(f, 'b'));
+          return { key: r.id as string, column: 'user_agent', value: 'rbac-agent' };
+        },
+      },
     },
     insert: NOBODY('saved through a function'),
     update: NOBODY('saved through a function'),
@@ -1013,6 +1060,12 @@ export const WRITES: WriteEntry[] = [
         const id = await probeTicket(f, at);
         return { key: id, column: 'state', value: 'cancelled' };
       },
+      other: {
+        target: async (f) => {
+          const id = await otherTicket(f, { state: 'waiting', completed_at: null });
+          return { key: id, column: 'state', value: 'cancelled' };
+        },
+      },
     },
     insert: TICKET_INSERT,
     update: w(
@@ -1044,6 +1097,39 @@ export const WRITES: WriteEntry[] = [
       why: 'a customer can only join the queue (waiting, created by the customer), not write a finished ticket',
     }),
     update: NOBODY('covered by queue_tickets'),
+    delete: NOBODY('covered by queue_tickets'),
+  },
+  {
+    // A customer cancelling their own ticket after it was finished (completed, completed_at left
+    // empty so only the old-state limit can stop it). The customer app only cancels live tickets.
+    table: 'queue_tickets',
+    label: 'queue_tickets_cancel_finished',
+    key: 'id',
+    updateOnly: true,
+    probe: {
+      insert: async () => {
+        throw new Error('update-only probe');
+      },
+      target: async (f, at) => {
+        const id = await probeTicket(f, at, { state: 'completed', completed_at: null });
+        return { key: id, column: 'state', value: 'cancelled' };
+      },
+      other: {
+        target: async (f) => {
+          const id = await otherTicket(f, { state: 'completed', completed_at: null });
+          return { key: id, column: 'state', value: 'cancelled' };
+        },
+      },
+    },
+    insert: NOBODY('covered by queue_tickets'),
+    update: patchW(
+      w({ barber: 'own', ...STAFF_BRANCH }, 'edit_tickets; a barber their own queue'),
+      ['customer'],
+      {
+        expect: 'deny',
+        why: 'a customer can cancel only a live ticket, not rewrite a finished one',
+      },
+    ),
     delete: NOBODY('covered by queue_tickets'),
   },
   {
@@ -1087,6 +1173,23 @@ export const WRITES: WriteEntry[] = [
         const r = await probeRow(f, 'service_sessions', sessionRow(f, at, ticket));
         // started_at, not ended_at: ending a session rolls into barber_service_stats.
         return { key: r.id as string, column: 'started_at', value: '2026-01-01T00:00:00Z' };
+      },
+      other: {
+        // A session of another barber at branch A.
+        insert: async (f) => {
+          const ticket = await probeTicket(f, 'a');
+          const { barberId } = await probeBarber(f, branchOf(f, 'a'));
+          return row(f, 'service_sessions', { ...sessionRow(f, 'a', ticket), barber_id: barberId });
+        },
+        target: async (f) => {
+          const ticket = await probeTicket(f, 'a');
+          const { barberId } = await probeBarber(f, branchOf(f, 'a'));
+          const r = await probeRow(f, 'service_sessions', {
+            ...sessionRow(f, 'a', ticket),
+            barber_id: barberId,
+          });
+          return { key: r.id as string, column: 'started_at', value: '2026-01-01T00:00:00Z' };
+        },
       },
     },
     insert: w({ barber: 'own', ...STAFF_BRANCH }, 'edit_tickets; a barber their own sessions'),

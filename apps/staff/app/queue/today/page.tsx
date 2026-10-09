@@ -191,7 +191,7 @@ export default function TodaysQueuePage() {
       }
       return;
     }
-    // service_sessions_barber_own (for all, own barber_id) already permits this insert.
+    // service_sessions_barber_own_insert (own barber_id) already permits this insert.
     const { error: sessionError } = await supabase.from('service_sessions').insert({
       ticket_id: ticket.id,
       barber_id: myBarber.id,
